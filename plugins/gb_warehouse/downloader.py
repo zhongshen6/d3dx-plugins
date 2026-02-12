@@ -13,7 +13,7 @@ from constant import K
 
 
 class DownloadMixin:
-    def download_and_import(self, url, filename=None, mod_id=None):
+    def download_and_import(self, url, filename=None, mod_id=None, ui=None):
         if not url:
             return
         core.log.info(f"(gb_warehouse) 下载请求: url={url} mod_id={mod_id} name={filename}")
@@ -26,22 +26,45 @@ class DownloadMixin:
         self.download_tasks.add(url)
         display_name = filename or self._guess_filename(url, None) or "文件"
         core.window.status.set_status(f"正在下载: {display_name}", 0)
+        if ui:
+            try:
+                ui.get("enabled")(False)
+                ui.get("show_progress")(True)
+            except Exception:
+                pass
 
         taskpool = getattr(core.construct, "taskpool", None)
         if not taskpool:
             self.download_tasks.discard(url)
             core.window.status.set_status("任务池不可用，无法下载", 1)
+            if ui:
+                try:
+                    ui.get("hide_progress")(0)
+                    ui.get("enabled")(True)
+                except Exception:
+                    pass
             return
-        taskpool.newtask(self.async_download_and_import, (url, filename, mod_id), {}, False)
+        taskpool.newtask(self.async_download_and_import, (url, filename, mod_id, ui), {}, False)
 
-    def async_download_and_import(self, url, filename=None, mod_id=None):
+    def async_download_and_import(self, url, filename=None, mod_id=None, ui=None):
         try:
-            path = self._download_file(url, filename)
+            path = self._download_file(url, filename, ui)
             if not path:
                 self.master.after(0, lambda: core.window.status.set_status("下载失败", 1))
+                if ui:
+                    try:
+                        ui.get("hide_progress")(0)
+                    except Exception:
+                        pass
                 return
             core.log.info(f"(gb_warehouse) 下载完成: {path}")
             self.master.after(0, lambda: core.window.status.set_status("下载完成，打开导入窗口", 0))
+            if ui:
+                try:
+                    ui.get("progress")(100)
+                    ui.get("hide_progress")(1000)
+                except Exception:
+                    pass
             self.master.after(0, lambda: self._open_import_window(path))
             if mod_id:
                 sha = self._calc_sha(path)
@@ -51,11 +74,21 @@ class DownloadMixin:
         except Exception as e:
             core.log.error(f"(gb_warehouse) 下载失败: {e}")
             self.master.after(0, lambda: core.window.status.set_status("下载失败", 1))
+            if ui:
+                try:
+                    ui.get("hide_progress")(0)
+                except Exception:
+                    pass
         finally:
             if hasattr(self, "download_tasks"):
                 self.download_tasks.discard(url)
+            if ui:
+                try:
+                    ui.get("enabled")(True)
+                except Exception:
+                    pass
 
-    def _download_file(self, url, filename=None):
+    def _download_file(self, url, filename=None, ui=None):
         session = getattr(self, "session", None)
         if session is None:
             import requests
@@ -64,6 +97,11 @@ class DownloadMixin:
         res = session.get(url, timeout=30, stream=True, allow_redirects=True)
         if res.status_code != 200:
             core.log.error(f"(gb_warehouse) 下载状态码异常: {res.status_code}")
+            if ui:
+                try:
+                    ui.get("hide_progress")(0)
+                except Exception:
+                    pass
             return None
 
         name = filename or self._guess_filename(url, res.headers.get("content-disposition"))
@@ -75,11 +113,59 @@ class DownloadMixin:
         os.makedirs(base_dir, exist_ok=True)
         path = self._ensure_unique_path(base_dir, name)
 
+        total = 0
+        try:
+            total = int(res.headers.get("content-length", 0) or 0)
+        except Exception:
+            total = 0
+        if ui:
+            try:
+                ui.get("show_progress")(total <= 0)
+                if total > 0:
+                    ui.get("progress")(0)
+            except Exception:
+                pass
+
+        last_ts = time.time()
+        last_bytes = 0
+        downloaded = 0
         with open(path, "wb") as f:
             for chunk in res.iter_content(chunk_size=256 * 1024):
                 if chunk:
                     f.write(chunk)
+                    downloaded += len(chunk)
+                    now = time.time()
+                    if now - last_ts >= 0.3:
+                        speed = (downloaded - last_bytes) / max(0.001, now - last_ts)
+                        last_ts = now
+                        last_bytes = downloaded
+                        if ui:
+                            try:
+                                if total > 0:
+                                    pct = int(downloaded * 100 / total)
+                                    ui.get("progress")(pct)
+                            except Exception:
+                                pass
         return path
+
+    def _format_speed(self, bytes_per_sec):
+        if bytes_per_sec <= 0:
+            return "0.0kb/s"
+        mb = bytes_per_sec / (1024 * 1024)
+        if mb >= 10:
+            value = int(mb)
+            if value > 99:
+                value = 99
+            return f"{value}mb/s"
+        if mb >= 0.1:
+            return f"{mb:.1f}mb/s"
+        kb = bytes_per_sec / 1024
+        if kb >= 10:
+            value = int(kb)
+            if value > 99:
+                value = 99
+            return f"{value}kb/s"
+        return f"{kb:.1f}kb/s"
 
     def _open_import_window(self, path):
         add_mod2 = getattr(core.additional, "add_mod2", None)

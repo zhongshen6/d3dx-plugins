@@ -278,11 +278,7 @@ class DetailMixin:
     def render_downloads(self, files):
         for item in self.download_buttons:
             try:
-                item["meta_label"].destroy()
-            except Exception:
-                pass
-            try:
-                item["button"].destroy()
+                item["item_frame"].destroy()
             except Exception:
                 pass
         self.download_buttons = []
@@ -310,8 +306,15 @@ class DetailMixin:
 
             state = NORMAL if url else DISABLED
             meta_text = f"🕒 {date_text}\n💾 {size_text}\n📥 {count}"
+
+            item_frame = ttkbootstrap.Frame(self.download_inner)
+            item_frame.pack(fill=X, pady=(0, 8))
+
+            meta_row = ttkbootstrap.Frame(item_frame)
+            meta_row.pack(fill=X, pady=(0, 2))
+
             meta_label = ttkbootstrap.Label(
-                self.download_inner,
+                meta_row,
                 text=meta_text,
                 font=("", 9),
                 bootstyle=SECONDARY,
@@ -319,19 +322,54 @@ class DetailMixin:
                 justify=LEFT,
                 anchor=W
             )
+            meta_label.pack(fill=X)
+
+            bar_wrap = ttkbootstrap.Frame(item_frame)
+            bar_wrap.pack(fill=X)
+            bar_wrap.pack_propagate(False)
+
+            progress = ttkbootstrap.Progressbar(
+                bar_wrap,
+                maximum=100,
+                mode="determinate"
+            )
             btn = ttkbootstrap.Button(
-                self.download_inner,
+                bar_wrap,
                 text="",
                 bootstyle=OUTLINE,
-                command=lambda u=url, n=name, mid=self.current_detail_id: self.download_and_import(u, n, mid) if u else None,
+                command=None,
                 state=state
             )
-            meta_label.pack(fill=X, pady=(0, 2))
-            btn.pack(fill=X, pady=(0, 8))
+            bar_wrap.update_idletasks()
+            btn_h = btn.winfo_reqheight()
+            if btn_h <= 1:
+                btn_h = 26
+            visible_h = 6
+            wrap_h = btn_h
+            bar_wrap.configure(height=wrap_h)
+            bar_wrap._gb_wrap_h = wrap_h
+            bar_wrap._gb_visible_h = visible_h
+
+            progress.place(x=0, y=wrap_h - visible_h, relwidth=1, height=visible_h)
+            btn.place(x=0, y=0, relwidth=1, height=wrap_h)
+            progress.place_forget()
+
+            def _click_download(u=url, n=name, mid=self.current_detail_id, pb=progress, b=btn, bw=bar_wrap):
+                if not u:
+                    return
+                ui = self._make_download_ui(pb, b, bw)
+                self.download_and_import(u, n, mid, ui=ui)
+
+            btn.configure(command=lambda u=url, n=name, mid=self.current_detail_id, pb=progress, b=btn, bw=bar_wrap: _click_download(u, n, mid, pb, b, bw))
             self.download_buttons.append({
+                "item_frame": item_frame,
+                "meta_row": meta_row,
                 "meta_label": meta_label,
                 "button": btn,
-                "name": name
+                "progress": progress,
+                "bar_wrap": bar_wrap,
+                "name": name,
+                "url": url
             })
 
         self.update_download_wraplength()
@@ -340,11 +378,7 @@ class DetailMixin:
     def set_download_empty(self, message):
         for item in self.download_buttons:
             try:
-                item["meta_label"].destroy()
-            except Exception:
-                pass
-            try:
-                item["button"].destroy()
+                item["item_frame"].destroy()
             except Exception:
                 pass
         self.download_buttons = []
@@ -424,6 +458,8 @@ class DetailMixin:
         for item in self.download_buttons:
             meta_label = item.get("meta_label")
             btn = item.get("button")
+            progress = item.get("progress")
+            bar_wrap = item.get("bar_wrap")
             name = item.get("name")
             if meta_label and meta_label.winfo_exists():
                 try:
@@ -441,6 +477,100 @@ class DetailMixin:
                 btn.configure(text=text)
             except Exception:
                 pass
+            try:
+                btn.update_idletasks()
+                req_h = btn.winfo_reqheight()
+                if req_h <= 1:
+                    req_h = 26
+                if bar_wrap and bar_wrap.winfo_exists():
+                    bar_wrap.configure(height=req_h)
+                    bar_wrap._gb_wrap_h = req_h
+                visible_h = getattr(bar_wrap, "_gb_visible_h", 6) if bar_wrap else 6
+                if progress and progress.winfo_exists() and progress.winfo_manager():
+                    if bar_wrap and bar_wrap.winfo_exists():
+                        progress.place_configure(y=max(0, req_h - visible_h), height=visible_h)
+                    btn.place_configure(height=max(10, req_h - visible_h))
+                else:
+                    btn.place_configure(height=req_h)
+            except Exception:
+                pass
+
+    def _make_download_ui(self, progress, button, bar_wrap):
+        def _set_progress(value):
+            if not progress or not progress.winfo_exists():
+                return
+            progress.configure(mode="determinate")
+            progress["value"] = value
+
+        def _show_progress(indeterminate=False):
+            if not progress or not progress.winfo_exists():
+                return
+            if indeterminate:
+                try:
+                    progress.configure(mode="indeterminate")
+                    progress.start(30)
+                except Exception:
+                    pass
+            else:
+                try:
+                    progress.stop()
+                except Exception:
+                    pass
+                progress.configure(mode="determinate")
+            if not progress.winfo_manager():
+                wrap_h = getattr(bar_wrap, "_gb_wrap_h", button.winfo_reqheight())
+                visible_h = getattr(bar_wrap, "_gb_visible_h", 6)
+                progress.place(x=0, y=max(0, wrap_h - visible_h), relwidth=1, height=visible_h)
+            if button and button.winfo_exists():
+                wrap_h = getattr(bar_wrap, "_gb_wrap_h", button.winfo_reqheight())
+                visible_h = getattr(bar_wrap, "_gb_visible_h", 6)
+                button.place_configure(height=max(10, wrap_h - visible_h))
+                try:
+                    button.lift()
+                except Exception:
+                    pass
+
+        def _hide_progress(delay_ms=0):
+            def _do_hide():
+                if not progress or not progress.winfo_exists():
+                    return
+                try:
+                    progress.stop()
+                except Exception:
+                    pass
+                if progress.winfo_manager():
+                    progress.place_forget()
+                if button and button.winfo_exists():
+                    wrap_h = getattr(bar_wrap, "_gb_wrap_h", button.winfo_reqheight())
+                    button.place_configure(height=wrap_h)
+            if delay_ms and delay_ms > 0:
+                try:
+                    self.master.after(delay_ms, _do_hide)
+                except Exception:
+                    _do_hide()
+            else:
+                _do_hide()
+
+        def _set_enabled(enabled):
+            if not button or not button.winfo_exists():
+                return
+            try:
+                button.configure(state=NORMAL if enabled else DISABLED)
+            except Exception:
+                pass
+
+        def _safe_call(fn, *args):
+            try:
+                self.master.after(0, lambda: fn(*args))
+            except Exception:
+                pass
+
+        return {
+            "progress": lambda value: _safe_call(_set_progress, value),
+            "show_progress": lambda indeterminate=False: _safe_call(_show_progress, indeterminate),
+            "hide_progress": lambda delay_ms=0: _safe_call(_hide_progress, delay_ms),
+            "enabled": lambda enabled: _safe_call(_set_enabled, enabled),
+        }
 
     def wrap_text_by_pixels(self, text, max_width, font, fudge=0):
         if not text:
