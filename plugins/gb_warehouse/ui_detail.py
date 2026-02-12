@@ -1,7 +1,6 @@
 # Licensed under the GNU General Public License v3.0
 # d3dxSkinManage Plugin: gb_warehouse (Detail UI)
 
-import datetime
 import html
 import io
 import re
@@ -18,6 +17,7 @@ from ttkbootstrap.constants import *
 import core
 import constants as const
 from additional import screen_preview
+from utils import DebouncedCall, format_ts
 
 
 class DetailMixin:
@@ -296,7 +296,7 @@ class DetailMixin:
             name = item.get("_sFile", "Unknown")
             size_bytes = item.get("_nFilesize")
             size_text = self.format_filesize(size_bytes)
-            date_text = self.format_file_date(item.get("_tsDateAdded"))
+            date_text = format_ts(item.get("_tsDateAdded"))
             count = item.get("_nDownloadCount", 0)
             url = item.get("_sDownloadUrl") or ""
             if not url:
@@ -399,15 +399,6 @@ class DetailMixin:
             text = f"{size_mb:.2f}"
         return f"{text}MB"
 
-    def format_file_date(self, ts):
-        if not ts:
-            return "--.--.--"
-        try:
-            dt = datetime.datetime.fromtimestamp(ts)
-            return dt.strftime("%y.%m.%d")
-        except Exception:
-            return "--.--.--"
-
     def get_download_wrap_width(self, width=None):
         try:
             self.download_inner.update_idletasks()
@@ -423,30 +414,15 @@ class DetailMixin:
     def update_download_wraplength(self, width=None):
         if not hasattr(self, "download_inner"):
             return
-        if not hasattr(self, "_download_wrap_job"):
-            self._download_wrap_job = None
-            self._pending_download_wrap_w = None
-        if const.UI_RESIZE_PAUSED:
-            self._pending_download_wrap_w = width
-            if self._download_wrap_job is None:
-                self._download_wrap_job = self.master.after(const.RESIZE_DEBOUNCE_MS, self._apply_download_wrap)
-            return
-        if self._download_wrap_job is not None:
-            try:
-                self.master.after_cancel(self._download_wrap_job)
-            except Exception:
-                pass
-            self._download_wrap_job = None
-        self._apply_download_wrap(width)
+        if not hasattr(self, "_download_wrap_debounce"):
+            self._download_wrap_debounce = DebouncedCall(
+                self.master,
+                const.RESIZE_DEBOUNCE_MS,
+                lambda: const.UI_RESIZE_PAUSED,
+            )
+        self._download_wrap_debounce.schedule(width, self._apply_download_wrap)
 
     def _apply_download_wrap(self, width=None):
-        self._download_wrap_job = None
-        if const.UI_RESIZE_PAUSED:
-            self._download_wrap_job = self.master.after(const.RESIZE_DEBOUNCE_MS, self._apply_download_wrap)
-            return
-        if width is None and hasattr(self, "_pending_download_wrap_w"):
-            width = self._pending_download_wrap_w
-            self._pending_download_wrap_w = None
         self.rewrap_download_buttons(width)
 
     def rewrap_download_buttons(self, width=None):
@@ -613,30 +589,15 @@ class DetailMixin:
         return max(120, canvas_w - const.DETAIL_TEXT_WRAP_PAD - const.DETAIL_TEXT_FUDGE)
 
     def update_detail_text_wraplength(self, width=None):
-        if not hasattr(self, "_detail_wrap_job"):
-            self._detail_wrap_job = None
-            self._pending_detail_wrap_w = None
-        if const.UI_RESIZE_PAUSED:
-            self._pending_detail_wrap_w = width
-            if self._detail_wrap_job is None:
-                self._detail_wrap_job = self.master.after(const.RESIZE_DEBOUNCE_MS, self._apply_detail_text_wrap)
-            return
-        if self._detail_wrap_job is not None:
-            try:
-                self.master.after_cancel(self._detail_wrap_job)
-            except Exception:
-                pass
-            self._detail_wrap_job = None
-        self._apply_detail_text_wrap(width)
+        if not hasattr(self, "_detail_wrap_debounce"):
+            self._detail_wrap_debounce = DebouncedCall(
+                self.master,
+                const.RESIZE_DEBOUNCE_MS,
+                lambda: const.UI_RESIZE_PAUSED,
+            )
+        self._detail_wrap_debounce.schedule(width, self._apply_detail_text_wrap)
 
     def _apply_detail_text_wrap(self, width=None):
-        self._detail_wrap_job = None
-        if const.UI_RESIZE_PAUSED:
-            self._detail_wrap_job = self.master.after(const.RESIZE_DEBOUNCE_MS, self._apply_detail_text_wrap)
-            return
-        if width is None and hasattr(self, "_pending_detail_wrap_w"):
-            width = self._pending_detail_wrap_w
-            self._pending_detail_wrap_w = None
         wrap_width = self.get_detail_text_wrap_width(width)
         if not wrap_width:
             return

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, unquote
 
 import core
 from constant import K
+from utils import merge_gb_explain
 
 
 class DownloadMixin:
@@ -148,25 +149,6 @@ class DownloadMixin:
                                 pass
         return path
 
-    def _format_speed(self, bytes_per_sec):
-        if bytes_per_sec <= 0:
-            return "0.0kb/s"
-        mb = bytes_per_sec / (1024 * 1024)
-        if mb >= 10:
-            value = int(mb)
-            if value > 99:
-                value = 99
-            return f"{value}mb/s"
-        if mb >= 0.1:
-            return f"{mb:.1f}mb/s"
-        kb = bytes_per_sec / 1024
-        if kb >= 10:
-            value = int(kb)
-            if value > 99:
-                value = 99
-            return f"{value}kb/s"
-        return f"{kb:.1f}kb/s"
-
     def _open_import_window(self, path):
         add_mod2 = getattr(core.additional, "add_mod2", None)
         if not add_mod2 or not hasattr(add_mod2, "add_mods"):
@@ -211,7 +193,7 @@ class DownloadMixin:
                 if item:
                     core.log.info(f"(gb_warehouse) 导入完成检测到: sha={sha}")
                     explain = item.get(K.INDEX.EXPLAIN) or ""
-                    updated = self._merge_gb_explain(explain, mod_id, ts)
+                    updated = merge_gb_explain(explain, mod_id, ts)
                     if updated != explain:
                         core.module.mods_index.item_data_update(sha, {K.INDEX.EXPLAIN: updated})
                         core.log.info(f"(gb_warehouse) 写入附加信息: sha={sha} id={mod_id}")
@@ -221,21 +203,6 @@ class DownloadMixin:
         finally:
             if hasattr(self, "pending_gb_marks"):
                 self.pending_gb_marks.discard(key)
-
-    def _merge_gb_explain(self, explain, mod_id, ts):
-        line = f"[GB] id={mod_id} last={ts}"
-        if not explain:
-            return line
-        lines = [x for x in explain.splitlines() if x.strip() != ""]
-        replaced = False
-        for i, l in enumerate(lines):
-            if l.strip().startswith("[GB]"):
-                lines[i] = line
-                replaced = True
-                break
-        if not replaced:
-            lines.append(line)
-        return "\n".join(lines)
 
     def _guess_filename(self, url, content_disposition):
         if content_disposition:

@@ -1,7 +1,6 @@
 # Licensed under the GNU General Public License v3.0
 # d3dxSkinManage Plugin: gb_warehouse (List UI)
 
-import datetime
 import io
 import tkinter.font as tkfont
 
@@ -12,6 +11,7 @@ from ttkbootstrap.constants import *
 
 import core
 import constants as const
+from utils import DebouncedCall, format_ts
 
 
 class GBListItem(ttkbootstrap.Frame):
@@ -22,8 +22,11 @@ class GBListItem(ttkbootstrap.Frame):
         self.data = data
         self._on_image_click = on_image_click
         self.is_destroyed = False
-        self._resize_job = None
-        self._pending_wraplength = None
+        self._wrap_debounce = DebouncedCall(
+            self,
+            const.RESIZE_DEBOUNCE_MS,
+            lambda: const.UI_RESIZE_PAUSED,
+        )
 
         # 主容器：fill=X 确保宽度随父容器变化
         self.container = ttkbootstrap.Frame(self, padding=10, bootstyle=SECONDARY)
@@ -67,7 +70,7 @@ class GBListItem(ttkbootstrap.Frame):
         views = data.get("_nViewCount", 0)
 
         ts = data.get("_tsDateUpdated") or data.get("_tsDateModified") or data.get("_tsDateAdded")
-        updated = self.format_list_date(ts)
+        updated = format_ts(ts)
         detail_text = f"👤{author}\n👁️{views}\n🕒{updated}"
         self.detail_label = ttkbootstrap.Label(
             self.info_frame,
@@ -81,41 +84,17 @@ class GBListItem(ttkbootstrap.Frame):
         # 监听信息区域大小变化，动态调整文字换行宽度
         self.info_frame.bind("<Configure>", self.on_info_resize)
 
-    def format_list_date(self, ts):
-        if not ts:
-            return "--.--.--"
-        try:
-            dt = datetime.datetime.fromtimestamp(ts)
-            return dt.strftime("%y.%m.%d")
-        except Exception:
-            return "--.--.--"
-
     def on_info_resize(self, event):
         """动态更新标签的换行宽度"""
         new_wraplength = event.width - 40  # 预留边距
         if new_wraplength <= 100:
             return
-        self._pending_wraplength = new_wraplength
-        if const.UI_RESIZE_PAUSED:
-            if self._resize_job is None:
-                self._resize_job = self.after(const.RESIZE_DEBOUNCE_MS, self.apply_info_resize)
-            return
-        if self._resize_job is not None:
-            try:
-                self.after_cancel(self._resize_job)
-            except Exception:
-                pass
-        self._resize_job = self.after(const.RESIZE_DEBOUNCE_MS, self.apply_info_resize)
+        self._wrap_debounce.schedule(new_wraplength, self.apply_info_resize)
 
-    def apply_info_resize(self):
-        self._resize_job = None
+    def apply_info_resize(self, new_wraplength):
         if self.is_destroyed:
             return
-        new_wraplength = self._pending_wraplength
         if not new_wraplength:
-            return
-        if const.UI_RESIZE_PAUSED:
-            self._resize_job = self.after(const.RESIZE_DEBOUNCE_MS, self.apply_info_resize)
             return
         self.name_label.configure(wraplength=new_wraplength)
         self.detail_label.configure(wraplength=new_wraplength)
@@ -165,11 +144,7 @@ class GBListItem(ttkbootstrap.Frame):
 
     def destroy(self):
         self.is_destroyed = True
-        if self._resize_job is not None:
-            try:
-                self.after_cancel(self._resize_job)
-            except Exception:
-                pass
+        self._wrap_debounce.cancel()
         super().destroy()
 
 
@@ -273,17 +248,22 @@ class ListMixin:
 
     def parallel_load_images(self, records):
         for item_widget, rec in zip(self.items, records):
-            core.construct.taskpool.newtask(self.download_single_image, (item_widget, rec), {}, False)
+            core.construct.taskpool.newtask(self.fetch_list_image, (rec, item_widget), {}, False)
 
     def prefetch_images(self, records):
         for rec in records:
-            core.construct.taskpool.newtask(self.download_image_to_cache, (rec,), {}, False)
+            core.construct.taskpool.newtask(self.fetch_list_image, (rec,), {}, False)
 
     def build_img_url(self, record):
         media = record.get("_aPreviewMedia", {}).get("_aImages", [])
         if not media:
             return None
-        return f"{media[0].get('_sBaseUrl')}/{media[0].get('_sFile530')}"
+        img = media[0]
+        base = img.get("_sBaseUrl")
+        file_name = img.get("_sFile530") or img.get("_sFile220") or img.get("_sFile") or img.get("_sFile100")
+        if not base or not file_name:
+            return None
+        return f"{base}/{file_name}"
 
     def fetch_processed_image(self, img_url):
         res = self.session.get(img_url, timeout=15)
@@ -291,20 +271,6 @@ class ListMixin:
             return None
         pil_img = PIL.Image.open(io.BytesIO(res.content))
         return core.module.image.image_canvas(pil_img, const.LIST_THUMB_W, const.LIST_THUMB_H, tkimg=False)
-
-    def download_image_to_cache(self, record):
-        try:
-            img_url = self.build_img_url(record)
-            if not img_url:
-                return
-            if img_url in self.image_cache:
-                return
-
-            pil_img = self.fetch_processed_image(img_url)
-            if pil_img is not None:
-                self.image_cache[img_url] = pil_img
-        except Exception as e:
-            core.log.debug(f"(gb_warehouse) 图片预取失败: {e}")
 
     def apply_cached_image(self, item_widget, img_url, pil_img):
         if item_widget.is_destroyed:
@@ -315,21 +281,19 @@ class ListMixin:
             self.tk_image_cache[img_url] = tk_img
         item_widget.update_image(tk_img)
 
-    def download_single_image(self, item_widget, record):
+    def fetch_list_image(self, record, item_widget=None):
         try:
-            if item_widget.is_destroyed:
-                return
             img_url = self.build_img_url(record)
             if not img_url:
                 return
-            cached = self.image_cache.get(img_url)
-            if cached is not None:
-                self.master.after(0, lambda: self.apply_cached_image(item_widget, img_url, cached))
+            if item_widget is not None and item_widget.is_destroyed:
                 return
-
-            pil_img = self.fetch_processed_image(img_url)
-            if pil_img is not None:
-                self.image_cache[img_url] = pil_img
-                self.master.after(0, lambda: self.apply_cached_image(item_widget, img_url, pil_img))
+            cached = self.image_cache.get(img_url)
+            if cached is None:
+                cached = self.fetch_processed_image(img_url)
+                if cached is not None:
+                    self.image_cache[img_url] = cached
+            if cached is not None and item_widget is not None:
+                self.master.after(0, lambda: self.apply_cached_image(item_widget, img_url, cached))
         except Exception as e:
-            core.log.debug(f"(gb_warehouse) 图片下载失败: {e}")
+            core.log.debug(f"(gb_warehouse) 图片获取失败: {e}")

@@ -1,7 +1,6 @@
 # Licensed under the GNU General Public License v3.0
 # d3dxSkinManage Plugin: gb_warehouse (Update Check)
 
-import re
 import time
 import threading
 
@@ -11,6 +10,7 @@ from ttkbootstrap.constants import OUTLINE, NORMAL, DISABLED
 import core
 import constants as const
 from constant import K
+from utils import merge_gb_explain, parse_gb_explain
 
 CMD_UNLOAD = "--X--"
 
@@ -150,7 +150,7 @@ class UpdateMixin:
                 pass
             return
         explain = item.get(K.INDEX.EXPLAIN) or ""
-        mod_id, _last = self._parse_gb_explain(explain)
+        mod_id, _last = parse_gb_explain(explain)
         core.log.info(f"(gb_warehouse) 详情按钮检测: sha={sha} mod_id={mod_id} last={_last}")
         try:
             btn.configure(state=NORMAL if mod_id else DISABLED)
@@ -197,7 +197,7 @@ class UpdateMixin:
             if not item:
                 continue
             explain = item.get(K.INDEX.EXPLAIN) or ""
-            mod_id, last_ts = self._parse_gb_explain(explain)
+            mod_id, last_ts = parse_gb_explain(explain)
             if not mod_id and "[GB]" in explain:
                 core.log.warn(f"(gb_warehouse) GB 标记解析失败: sha={sha} explain={explain}")
             if not mod_id or not last_ts:
@@ -250,12 +250,12 @@ class UpdateMixin:
         if not item:
             return
         explain = item.get(K.INDEX.EXPLAIN) or ""
-        mod_id, _last = self._parse_gb_explain(explain)
+        mod_id, _last = parse_gb_explain(explain)
         if not mod_id:
             core.log.warn(f"(gb_warehouse) 打开详情失败: sha={sha} 未找到 GB 标记")
             return
 
-        new_explain = self._merge_gb_explain(explain, mod_id, int(time.time()))
+        new_explain = merge_gb_explain(explain, mod_id, int(time.time()))
         core.module.mods_index.item_data_update(sha, {K.INDEX.EXPLAIN: new_explain})
         self._clear_update_flag(sha, item.get(K.INDEX.OBJECT, ""))
 
@@ -299,40 +299,3 @@ class UpdateMixin:
                 mods_manage.update_choices_list()
             except Exception:
                 pass
-
-    def _parse_gb_explain(self, explain):
-        explain = self._normalize_explain(explain)
-        match = re.search(r"\[GB\][^\n]*id\s*=\s*(\d+)[^\n]*last\s*=\s*(\d+)", explain, re.IGNORECASE)
-        if not match:
-            return None, None
-        try:
-            return int(match.group(1)), int(match.group(2))
-        except Exception:
-            return None, None
-
-    def _merge_gb_explain(self, explain, mod_id, ts):
-        line = f"[GB] id={mod_id} last={ts}"
-        if not explain:
-            return line
-        sep = "\n"
-        if "\\n" in explain and "\n" not in explain:
-            sep = "\\n"
-            lines = explain.split("\\n")
-        else:
-            lines = explain.splitlines()
-        replaced = False
-        for i, l in enumerate(lines):
-            if l.strip().startswith("[GB]"):
-                lines[i] = line
-                replaced = True
-                break
-        if not replaced:
-            lines.append(line)
-        return sep.join(lines)
-
-    def _normalize_explain(self, explain):
-        if not explain:
-            return ""
-        if "\\n" in explain and "\n" not in explain:
-            return explain.replace("\\n", "\n")
-        return explain
