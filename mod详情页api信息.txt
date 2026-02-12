@@ -1,0 +1,367 @@
+https://gamebanana.com/apiv11/Mod/641195/ProfilePage
+
+{
+    "_idRow": 641195,
+    "_nStatus": "0",
+    "_bIsPrivate": false,
+    "_bAccessorIsSubmitter": false,
+    "_bIsTrashed": false,
+    "_bIsWithheld": false,
+    "_sName": "Caroler Dahlia",
+    "_sCommentsMode": "open",
+    "_tsDateModified": 1766458137,
+    "_tsDateAdded": 1766458137,
+    "_sProfileUrl": "https:\/\/gamebanana.com\/mods\/641195",
+    "_aPreviewMedia": {
+        "_aImages": [
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a0206eb48a.jpg",
+                "_sFile220": "220-90_694a0206eb48a.jpg",
+                "_hFile220": 124,
+                "_wFile220": 220,
+                "_sFile530": "530-90_694a0206eb48a.jpg",
+                "_hFile530": 298,
+                "_wFile530": 530,
+                "_sFile100": "100-90_694a0206eb48a.jpg",
+                "_hFile100": 56,
+                "_wFile100": 100
+            },
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a020aaf6ef.jpg",
+                "_sFile100": "100-90_694a020aaf6ef.jpg",
+                "_hFile100": 56,
+                "_wFile100": 100
+            },
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a02ca952e3.jpg",
+                "_sFile100": "100-90_694a02ca952e3.jpg",
+                "_hFile100": 90,
+                "_wFile100": 100
+            },
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a02f37d34f.jpg",
+                "_sFile100": "100-90_694a02f37d34f.jpg",
+                "_hFile100": 56,
+                "_wFile100": 100
+            },
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a02f696289.jpg",
+                "_sFile100": "100-90_694a02f696289.jpg",
+                "_hFile100": 56,
+                "_wFile100": 100
+            },
+            {
+                "_sType": "screenshot",
+                "_sBaseUrl": "https:\/\/images.gamebanana.com\/img\/ss\/mods",
+                "_sFile": "694a02f982112.jpg",
+                "_sFile100": "100-90_694a02f982112.jpg",
+                "_hFile100": 56,
+                "_wFile100": 100
+            }
+        ]
+    },
+    "_nUpdatesCount": 0,
+    "_bHasUpdates": false,
+    "_nAllTodosCount": 0,
+    "_bHasTodos": false,
+    "_nPostCount": 0,
+    "_aTags": [],
+    "_bCreatedBySubmitter": true,
+    "_bIsPorted": false,
+    "_nThanksCount": 1,
+    "_sInitialVisibility": "show",
+    "_sDownloadUrl": "https:\/\/gamebanana.com\/mods\/download\/641195",
+    "_nDownloadCount": 178,
+    "_aFiles": [
+        {
+            "_idRow": 1585894,
+            "_sFile": "dahlia.zip",
+            "_nFilesize": 7127311,
+            "_tsDateAdded": 1766458122,
+            "_nDownloadCount": 178,
+            "_sDownloadUrl": "https:\/\/gamebanana.com\/dl\/1585894",
+            "_sMd5Checksum": "3dadc9b6adca99df288e2018fca32234",
+            "_sAnalysisState": "done",
+            "_sAnalysisResult": "ok",
+            "_sAnalysisResultVerbose": "File passed preliminary analysis",
+            "_sAvState": "done",
+            "_sAvResult": "clean",
+            "_bIsArchived": false,
+            "_bHasContents": true
+        }
+    ],
+    "_nSubscriberCount": 3,
+    "_aContributingStudios": [],
+    "_sLicense": "<a rel=\"license\" href=\"http:\/\/creativecommons.org\/licenses\/by-nc-nd\/4.0\/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https:\/\/i.creativecommons.org\/l\/by-nc-nd\/4.0\/88x31.png\" \/><\/a><br \/>This work is licensed under a <a rel=\"license\" href=\"http:\/\/creativecommons.org\/licenses\/by-nc-nd\/4.0\/\">Creative Commons Attribution-NonCommercial-NoDerivs 4.0 Unported License<\/a>.",
+    "_aLicenseChecklist": {
+        "yes": [
+            "Download and install this Mod"
+        ],
+        "ask": [
+            "Redistribute this Mod on other sites",
+            "Modify this Mod and distribute the modified Mod on GameBanana",
+            "Modify this Mod and distribute the modified Mod on another site",
+            "Use parts of this Mod in another Mod and distribute the Mod on GameBanana",
+            "Use parts of this Mod in another Mod and distribute the Mod on another site",
+            "Use this Mod or components of this Mod in adult\/NSFW content"
+        ],
+        "no": [
+            "Use this Mod or components of this Mod commercially"
+        ]
+    },
+    "_bGenerateTableOfContents": false,
+    "_sText": "I know christmas is in like 3 days but heres this lol. Only toggle makes his hair slightly pinker, and toggle key is up key!<br><br>Thanks to Choc0_Sprinkl3 for the thumbnail and for taking the photos.<br>Also thanks to Chio_riya for testing weights for me!<br><br>MAKE SURE YOU HAVE THE MOST RECENT ORFIX AND TEXFX.<br><br>Model from Idolmaster Shiney Colors Song for Prism.<br>Model ripped by Rainendings.",
+    "_bIsObsolete": false,
+    "_nLikeCount": 42,
+    "_bAccessorHasUnliked": false,
+    "_bAccessorHasLiked": false,
+    "_nViewCount": 1817,
+    "_sVersion": "",
+    "_bAcceptsDonations": false,
+    "_bShowRipePromo": true,
+    "_aEmbeddables": {
+        "_sEmbeddableImageBaseUrl": "https:\/\/gamebanana.com\/mods\/embeddables\/641195",
+        "_aVariants": [
+            "small",
+            "small_square",
+            "medium",
+            "medium_square",
+            "medium_square_minimal",
+            "large",
+            "large_minimal",
+            "large_square",
+            "large_minimal_square",
+            "thumbnail"
+        ]
+    },
+    "_aSubmitter": {
+        "_idRow": 3222265,
+        "_sName": "TheRealEmil",
+        "_sUserTitle": "Kinda dumb",
+        "_sHonoraryTitle": "",
+        "_tsJoinDate": 1708812202,
+        "_sAvatarUrl": "https:\/\/images.gamebanana.com\/img\/av\/66ad5dbf41e74.png",
+        "_sSigUrl": "",
+        "_sProfileUrl": "https:\/\/gamebanana.com\/members\/3222265",
+        "_sPointsUrl": "https:\/\/gamebanana.com\/members\/logs\/pointslog\/3222265",
+        "_sMedalsUrl": "https:\/\/gamebanana.com\/members\/stats\/medals\/3222265",
+        "_bIsOnline": false,
+        "_sLocation": "<a href=\"https:\/\/gamebanana.com\">Home<\/a> > <a href=\"https:\/\/gamebanana.com\/games\/8552\"><img src=\"https:\/\/images.gamebanana.com\/img\/ico\/games\/686d7fdcbeb5a.png\"\/><span>Genshin Impact<\/span><\/a> > <a href=\"https:\/\/gamebanana.com\/mods\/games\/8552\">Mods<\/a>",
+        "_sOnlineTitle": "",
+        "_sOfflineTitle": "",
+        "_nPoints": 62636,
+        "_nPointsRank": 325,
+        "_aNormalMedals": [
+            [
+                "m_age_1.png",
+                "One month a member",
+                "normal",
+                1667664
+            ],
+            [
+                "mods1.png",
+                "Submitted 5 Mods",
+                "normal",
+                1845347
+            ],
+            [
+                "thanks_recvd_1.png",
+                "Received thanks 5 times",
+                "normal",
+                1845750
+            ],
+            [
+                "m_pr_1.png",
+                "Reached 1,000 Points",
+                "normal",
+                1845794
+            ],
+            [
+                "mods2.png",
+                "Submitted 10 Mods",
+                "normal",
+                1927464
+            ],
+            [
+                "m_pr_2.png",
+                "Reached 2,500 Points",
+                "normal",
+                1940544
+            ],
+            [
+                "subscribers_1.png",
+                "Reached 10 subscribers",
+                "normal",
+                1957543
+            ],
+            [
+                "m_age_2.png",
+                "6 months a member",
+                "normal",
+                2155338
+            ],
+            [
+                "m_pr_3.png",
+                "Reached 7,500 Points",
+                "normal",
+                2173971
+            ],
+            [
+                "m_age_3.png",
+                "1 year a member",
+                "normal",
+                2866333
+            ],
+            [
+                "features_1.png",
+                "Submission featured",
+                "normal",
+                3119617
+            ],
+            [
+                "m_pr_4.png",
+                "Reached 25,000 Points",
+                "normal",
+                3361867
+            ]
+        ],
+        "_aRareMedals": [
+            [
+                "mods3.png",
+                "Submitted 15 Mods",
+                "rare",
+                1958373
+            ],
+            [
+                "mods4.png",
+                "Submitted 20 Mods",
+                "rare",
+                2804460
+            ],
+            [
+                "subscribers_2.png",
+                "Reached 50 subscribers",
+                "rare",
+                2918989
+            ],
+            [
+                "thanks_recvd_2.png",
+                "Received thanks 50 times",
+                "rare",
+                2978341
+            ],
+            [
+                "features_2.png",
+                "10 submissions featured",
+                "rare",
+                3760780
+            ],
+            [
+                "mods5.png",
+                "Submitted 50 Mods",
+                "rare",
+                4043400
+            ]
+        ],
+        "_aLegendaryMedals": [
+            [
+                "subscribers_3.png",
+                "Reached 100 subscribers",
+                "legendary",
+                3479058
+            ]
+        ],
+        "_bHasRipe": false,
+        "_nBuddyCount": 9,
+        "_nSubscriberCount": 212,
+        "_aDonationMethods": [],
+        "_bAccessorIsBuddy": false,
+        "_bBuddyRequestExistsWithAccessor": false,
+        "_bAccessorIsSubscribed": false,
+        "_sUpicUrl": "https:\/\/images.gamebanana.com\/img\/upic\/67f0b7b6bfd0e.png",
+        "_aDefaultLicenseChecklist": [
+            "yes",
+            "ask",
+            "ask",
+            "ask",
+            "ask",
+            "ask",
+            "no",
+            "ask"
+        ],
+        "_sDefaultLicense": "",
+        "_sHdAvatarUrl": "https:\/\/images.gamebanana.com\/img\/av\/6820d25081299.png"
+    },
+    "_bFollowLinks": true,
+    "_aGame": {
+        "_idRow": 8552,
+        "_sName": "Genshin Impact",
+        "_sAbbreviation": "GI",
+        "_sProfileUrl": "https:\/\/gamebanana.com\/games\/8552",
+        "_sIconUrl": "https:\/\/images.gamebanana.com\/img\/ico\/games\/686d7fdcbeb5a.png",
+        "_sBannerUrl": "https:\/\/images.gamebanana.com\/img\/ico\/games\/686d7fdcbeb5a.png",
+        "_nSubscriberCount": 87321,
+        "_bHasSubmissionQueue": false,
+        "_bAccessorIsSubscribed": true,
+        "_idAccessorSubscriptionRow": 4711913
+    },
+    "_aCategory": {
+        "_idRow": 37552,
+        "_sName": "Dahlia",
+        "_sModelName": "ModCategory",
+        "_sProfileUrl": "https:\/\/gamebanana.com\/mods\/cats\/37552",
+        "_sIconUrl": ""
+    },
+    "_aSuperCategory": {
+        "_idRow": 18140,
+        "_sName": "Characters",
+        "_sModelName": "ModCategory",
+        "_sProfileUrl": "https:\/\/gamebanana.com\/mods\/cats\/18140",
+        "_sIconUrl": "https:\/\/images.gamebanana.com\/img\/ico\/ModCategory\/62dc3f0e0ec6f.png"
+    },
+    "_aCredits": [
+        {
+            "_sGroupName": "Key Authors",
+            "_aAuthors": [
+                {
+                    "_sRole": "Merry Chrystler",
+                    "_idRow": 3222265,
+                    "_sName": "TheRealEmil",
+                    "_sUpicUrl": "https:\/\/images.gamebanana.com\/img\/upic\/67f0b7b6bfd0e.png",
+                    "_sProfileUrl": "https:\/\/gamebanana.com\/members\/3222265",
+                    "_sAvatarUrl": "https:\/\/images.gamebanana.com\/img\/av\/66ad5dbf41e74.png",
+                    "_bIsOnline": false
+                },
+                {
+                    "_sRole": "Thumbnail",
+                    "_idRow": 4328154,
+                    "_sName": "Choc0_Sprinkl3",
+                    "_sProfileUrl": "https:\/\/gamebanana.com\/members\/4328154",
+                    "_sAvatarUrl": "https:\/\/images.gamebanana.com\/img\/av\/6820d1f1b7888.png",
+                    "_bIsOnline": false
+                },
+                {
+                    "_sRole": "Weight tests",
+                    "_idRow": 2907402,
+                    "_sName": "chio_riya",
+                    "_sProfileUrl": "https:\/\/gamebanana.com\/members\/2907402",
+                    "_sAvatarUrl": "https:\/\/images.gamebanana.com\/img\/av\/66329968dfba3.png",
+                    "_bIsOnline": false
+                }
+            ]
+        }
+    ],
+    "_idAccessorSubscriptionRow": 0,
+    "_bAccessorIsSubscribed": false,
+    "_bAccessorHasThanked": false
+}
