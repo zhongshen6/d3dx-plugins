@@ -1,3 +1,5 @@
+# 该项目用于为d3dxskinmanage模组管理器编写插件
+
 # auto_fill_object 
 ### d3dxSkinManage 模组智能对象识别填充插件
 
