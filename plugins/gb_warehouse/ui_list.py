@@ -149,6 +149,42 @@ class GBListItem(ttkbootstrap.Frame):
 
 
 class ListMixin:
+    def _get_list_token(self):
+        mode = getattr(self, "list_mode", "list") or "list"
+        if mode == "search":
+            return ("search", (self.list_query or "").strip())
+        if mode == "category":
+            return ("category", int(self.category_id or 0))
+        return ("list", 0)
+
+    def _get_cache_key(self, page):
+        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
+        return (game_id, self._get_list_token(), page)
+
+    def _match_list_mode(self, mode, query, category_id):
+        current = getattr(self, "list_mode", "list")
+        if current != mode:
+            return False
+        if mode == "search":
+            return (self.list_query or "").strip() == (query or "").strip()
+        if mode == "category":
+            return int(self.category_id or 0) == int(category_id or 0)
+        return True
+
+    def set_list_mode(self, mode="list", query=None, category_id=None, category_name=None):
+        self.list_mode = mode or "list"
+        self.list_query = (query or "").strip()
+        self.category_id = int(category_id) if category_id else None
+        self.category_name = category_name or ""
+        self.page_cache = {}
+        self.prefetching_pages = set()
+        self.current_page = 1
+        self.page_count = None
+        if hasattr(self, "_clear_list_ui"):
+            self._clear_list_ui()
+        if self.is_visible:
+            self.load_page(1)
+
     def on_item_image_click(self, record):
         mod_id = record.get("_idRow")
         name = record.get("_sName", "")
@@ -186,11 +222,20 @@ class ListMixin:
         self.prefetch_page(next_page)
 
     def prefetch_page(self, page):
-        if page < 1 or page in self.page_cache or page in self.prefetching_pages:
+        if page < 1:
             return
-        self.prefetching_pages.add(page)
+        cache_key = self._get_cache_key(page)
+        if cache_key in self.page_cache or cache_key in self.prefetching_pages:
+            return
+        self.prefetching_pages.add(cache_key)
         game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
-        core.construct.taskpool.newtask(self.async_fetch_json, (page, True, game_id), {}, False)
+        mode = getattr(self, "list_mode", "list")
+        core.construct.taskpool.newtask(
+            self.async_fetch_json,
+            (page, True, game_id, mode, self.list_query, self.category_id),
+            {},
+            False,
+        )
 
     def trigger_load(self):
         self.load_page(1)
@@ -204,23 +249,33 @@ class ListMixin:
             except Exception:
                 pass
         self.current_page = page
-        if page in self.page_cache:
-            self.render_list(self.page_cache[page], page)
+        cache_key = self._get_cache_key(page)
+        if cache_key in self.page_cache:
+            self.render_list(self.page_cache[cache_key], page)
             if self.is_visible:
                 self.prefetch_next_page()
             return
         core.window.status.set_status(f"正在同步高清仓库列表... 第 {page} 页", 0)
         game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
-        core.construct.taskpool.newtask(self.async_fetch_json, (page, False, game_id), {}, False)
+        mode = getattr(self, "list_mode", "list")
+        core.construct.taskpool.newtask(
+            self.async_fetch_json,
+            (page, False, game_id, mode, self.list_query, self.category_id),
+            {},
+            False,
+        )
 
-    def on_page_loaded(self, page, records, page_count=None, prefetch=False, game_id=None):
+    def on_page_loaded(self, page, records, page_count=None, prefetch=False, game_id=None, mode="list", query=None, category_id=None):
         if game_id and hasattr(self, "get_game_id") and game_id != self.get_game_id():
+            return
+        if not self._match_list_mode(mode, query, category_id):
             return
         if page_count:
             self.page_count = page_count
-        self.page_cache[page] = records
-        if page in self.prefetching_pages:
-            self.prefetching_pages.discard(page)
+        cache_key = self._get_cache_key(page)
+        self.page_cache[cache_key] = records
+        if cache_key in self.prefetching_pages:
+            self.prefetching_pages.discard(cache_key)
         if prefetch:
             self.update_page_label()
             core.construct.taskpool.newtask(self.prefetch_images, (records,), {}, False)

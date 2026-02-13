@@ -42,6 +42,27 @@ class SettingsMixin:
         conf.gb_game_id = int(game_id)
         core.log.info(f"(gb_warehouse) 保存数据源: env={self._get_env_name()} id={game_id}")
 
+    def _get_saved_root_category_id(self):
+        conf = getattr(core.userenv, "configuration", None)
+        if not conf:
+            return None
+        value = getattr(conf, "gb_root_category_id", None)
+        return self._normalize_game_id(value)
+
+    def _set_saved_root_category_id(self, category_id):
+        conf = getattr(core.userenv, "configuration", None)
+        if not conf:
+            return
+        conf.gb_root_category_id = int(category_id)
+        core.log.info(f"(gb_warehouse) 保存根分类: env={self._get_env_name()} id={category_id}")
+
+    def get_root_category_id(self):
+        saved = self._get_saved_root_category_id()
+        if saved:
+            return saved
+        env_name = self._get_env_name()
+        return const.ENV_ROOT_CATEGORY_ID_MAP.get(env_name)
+
     def get_game_id(self):
         env_name = self._get_env_name()
         if self.current_env_name != env_name:
@@ -95,6 +116,7 @@ class SettingsMixin:
 
         env_name = self._get_env_name() or "<未登录>"
         initial_value = self._get_saved_game_id() or const.ENV_GAME_ID_MAP.get(env_name) or const.DEFAULT_GAME_ID
+        initial_root = self._get_saved_root_category_id() or const.ENV_ROOT_CATEGORY_ID_MAP.get(env_name) or ""
 
         win = ttkbootstrap.Toplevel("GB 数据源设置")
         self._game_id_window = win
@@ -116,6 +138,15 @@ class SettingsMixin:
         entry.pack(side=LEFT, padx=(10, 0))
         entry.insert(0, str(initial_value))
 
+        row_root = ttkbootstrap.Frame(frame)
+        row_root.pack(fill=X, pady=(0, 6))
+        label_root = ttkbootstrap.Label(row_root, text="根分类 ID")
+        label_root.pack(side=LEFT)
+        entry_root = ttkbootstrap.Entry(row_root, width=12)
+        entry_root.pack(side=LEFT, padx=(10, 0))
+        if initial_root:
+            entry_root.insert(0, str(initial_root))
+
         hint = ttkbootstrap.Label(frame, text="输入 GameBanana Game ID，例如 8552 / 18366", bootstyle=SECONDARY)
         hint.pack(anchor=W, pady=(0, 8))
 
@@ -125,7 +156,7 @@ class SettingsMixin:
         btn_row = ttkbootstrap.Frame(frame)
         btn_row.pack(fill=X, pady=(10, 0))
 
-        def _commit(value_text):
+        def _commit(value_text, root_text):
             value_text = (value_text or "").strip()
             if not value_text:
                 game_id = const.DEFAULT_GAME_ID
@@ -134,13 +165,30 @@ class SettingsMixin:
                 return
             else:
                 game_id = int(value_text)
+            root_text = (root_text or "").strip()
+            if root_text:
+                if not root_text.isdigit():
+                    err.configure(text="根分类 ID 必须是纯数字")
+                    return
+                root_id = int(root_text)
+            else:
+                root_id = None
             core.log.info(f"(gb_warehouse) 手动设置数据源: env={env_name} id={game_id}")
             self._set_saved_game_id(game_id)
+            if root_id is not None:
+                self._set_saved_root_category_id(root_id)
             self.apply_game_id_change(game_id)
             try:
                 win.destroy()
             except Exception:
                 pass
+            pending = getattr(self, "_pending_open_category", False)
+            self._pending_open_category = False
+            if pending and self.get_root_category_id():
+                try:
+                    self.master.after(0, self.open_category_browser)
+                except Exception:
+                    pass
 
         def _cancel():
             if force_prompt and not self._get_saved_game_id():
@@ -151,7 +199,12 @@ class SettingsMixin:
             except Exception:
                 pass
 
-        btn_save = ttkbootstrap.Button(btn_row, text="保存", bootstyle=SUCCESS, command=lambda: _commit(entry.get()))
+        btn_save = ttkbootstrap.Button(
+            btn_row,
+            text="保存",
+            bootstyle=SUCCESS,
+            command=lambda: _commit(entry.get(), entry_root.get()),
+        )
         btn_cancel = ttkbootstrap.Button(btn_row, text="取消", bootstyle=OUTLINE, command=_cancel)
         btn_cancel.pack(side=RIGHT)
         btn_save.pack(side=RIGHT, padx=(0, 8))
@@ -160,3 +213,8 @@ class SettingsMixin:
             _cancel()
 
         win.protocol("WM_DELETE_WINDOW", _on_close)
+        try:
+            win.update_idletasks()
+            core.window.methods.center_window_for_window(win, core.window.mainwindow)
+        except Exception:
+            pass

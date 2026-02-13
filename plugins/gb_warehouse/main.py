@@ -26,6 +26,7 @@ from downloader import DownloadMixin
 from update_check import UpdateMixin
 from ui_list import ListMixin
 from settings import SettingsMixin
+from categories import CategoryMixin
 from ui_detail import DetailMixin
 
 __version__ = "v1.4.1"
@@ -34,7 +35,7 @@ __version__ = "v1.4.1"
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, SettingsMixin):
+class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, SettingsMixin, CategoryMixin):
     """列表 UI 控制器"""
 
     def __init__(self, warehouse_instance):
@@ -72,6 +73,14 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.current_env_name = None
         self._env_prompted = False
         self._game_id_window = None
+        self._pending_open_category = False
+        self._category_window = None
+        self._category_tree = None
+        self._category_token = 0
+        self.list_mode = "list"
+        self.list_query = ""
+        self.category_id = None
+        self.category_name = ""
 
         self.session = requests.Session()
         self.session.trust_env = False
@@ -111,6 +120,37 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.Frame_pager = ttkbootstrap.Frame(self.Frame_list, padding=(10, 6))
         self.Frame_pager.pack(side=BOTTOM, fill=X)
 
+        self.Frame_search = ttkbootstrap.Frame(self.Frame_list, padding=(10, 6))
+        self.Frame_search.pack(side=TOP, fill=X)
+
+        self.home_button = ttkbootstrap.Button(
+            self.Frame_search,
+            text="🏠",
+            bootstyle=OUTLINE,
+            width=3,
+            command=self.go_home_list
+        )
+        self.search_entry = ttkbootstrap.Entry(self.Frame_search)
+        self.search_button = ttkbootstrap.Button(
+            self.Frame_search,
+            text="搜索",
+            bootstyle=OUTLINE,
+            width=6,
+            command=self.on_search_submit
+        )
+        self.category_button = ttkbootstrap.Button(
+            self.Frame_search,
+            text="分类",
+            bootstyle=OUTLINE,
+            width=6,
+            command=self.open_category_browser
+        )
+        self.home_button.pack(side=LEFT)
+        self.search_entry.pack(side=LEFT, fill=X, expand=True, padx=(8, 0))
+        self.search_button.pack(side=LEFT, padx=(8, 0))
+        self.category_button.pack(side=LEFT, padx=(8, 0))
+        self.search_entry.bind("<Return>", lambda *_: self.on_search_submit(), add="+")
+
         self.btn_prev = ttkbootstrap.Button(
             self.Frame_pager,
             text="上一页",
@@ -133,10 +173,13 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
             width=6,
             command=self.open_game_id_settings
         )
+        self.id_entry = ttkbootstrap.Entry(self.Frame_pager, width=10)
         self.btn_prev.pack(side=LEFT)
         self.page_label.pack(side=LEFT, padx=10)
         self.btn_next.pack(side=LEFT)
         self.btn_source.pack(side=LEFT, padx=(10, 0))
+        self.id_entry.pack(side=LEFT, padx=(10, 0))
+        self._init_id_entry()
         self.update_page_label()
 
         self.list_notice = ttkbootstrap.Frame(self.Frame_list, padding=(10, 6))
@@ -361,15 +404,8 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
             self.Frame_detail.tkraise()
             self.Frame_download.tkraise()
         else:
-            extra = total_w - const.LAYOUT_FULL_W
-            list_add = extra // 3
-            list_w = const.LIST_BASE_W + list_add
-            if list_w > const.LIST_MAX_W:
-                list_w = const.LIST_MAX_W
-                detail_w = total_w - const.DOWNLOAD_W - list_w
-            else:
-                detail_add = extra - list_add
-                detail_w = const.DETAIL_BASE_W + detail_add
+            list_w = const.LIST_BASE_W
+            detail_w = total_w - const.DOWNLOAD_W - list_w
             down_w = const.DOWNLOAD_W
 
             self.Frame_list.configure(width=list_w)
@@ -460,6 +496,20 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
             self.ensure_game_id(prompt_if_missing=True)
             self.prefetch_next_page()
 
+    def on_search_submit(self):
+        text = self.search_entry.get().strip()
+        if not text:
+            self.set_list_mode("list")
+            return
+        self.set_list_mode("search", query=text)
+
+    def go_home_list(self):
+        try:
+            self.search_entry.delete(0, "end")
+        except Exception:
+            pass
+        self.set_list_mode("list")
+
     def apply_game_id_change(self, game_id, reload=True):
         game_id = self._normalize_game_id(game_id) or const.DEFAULT_GAME_ID
         if self.current_game_id == game_id and self.page_cache:
@@ -502,6 +552,59 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
                 self.scroll_frame.w_canvas.yview_moveto(0)
             except Exception:
                 pass
+
+    def _init_id_entry(self):
+        placeholder = "输入id"
+        self._id_entry_placeholder = placeholder
+        try:
+            self._id_entry_default_fg = self.id_entry.cget("foreground")
+        except Exception:
+            self._id_entry_default_fg = None
+        self.id_entry.insert(0, placeholder)
+        try:
+            self.id_entry.configure(foreground="#888888")
+        except Exception:
+            pass
+
+        tip = "输入模组id后回车以打开mod详情页"
+        try:
+            core.window.annotation_toplevel.register(self.id_entry, tip, 1)
+        except Exception:
+            pass
+
+        def _focus_in(_event=None):
+            current = self.id_entry.get()
+            if current == placeholder:
+                self.id_entry.delete(0, "end")
+                if self._id_entry_default_fg:
+                    try:
+                        self.id_entry.configure(foreground=self._id_entry_default_fg)
+                    except Exception:
+                        pass
+
+        def _focus_out(_event=None):
+            current = self.id_entry.get().strip()
+            if not current:
+                self.id_entry.delete(0, "end")
+                self.id_entry.insert(0, placeholder)
+                try:
+                    self.id_entry.configure(foreground="#888888")
+                except Exception:
+                    pass
+
+        def _on_submit(_event=None):
+            value = self.id_entry.get().strip()
+            if value == placeholder:
+                return
+            if not value.isdigit():
+                self.id_entry.delete(0, "end")
+                return
+            mod_id = int(value)
+            self.load_detail(mod_id)
+
+        self.id_entry.bind("<FocusIn>", _focus_in, add="+")
+        self.id_entry.bind("<FocusOut>", _focus_out, add="+")
+        self.id_entry.bind("<Return>", _on_submit, add="+")
 
 
 

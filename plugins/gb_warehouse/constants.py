@@ -6,9 +6,17 @@ ENV_GAME_ID_MAP = {
     "GenshinImpact": 8552,
     "StarRail": 18366,
 }
+ENV_ROOT_CATEGORY_ID_MAP = {
+    "GenshinImpact": 18140,
+    "StarRail": 22832,
+}
 
 GB_API_URL_TMPL = "https://gamebanana.com/apiv11/Game/{game_id}/Subfeed?_sSort=default&_csvModelInclusions=Mod&_nPage={page}"
 GB_MOD_API_TMPL = "https://gamebanana.com/apiv11/Mod/{mod_id}/ProfilePage"
+GB_SEARCH_URL = "https://gamebanana.com/apiv11/Util/Search/Results"
+GB_CATEGORY_LIST_URL = "https://gamebanana.com/apiv11/Mod/Index"
+GB_SUBCATEGORY_URL_TMPL = "https://gamebanana.com/apiv11/ModCategory/{root_id}/SubCategories"
+GB_LIST_PERPAGE = 15
 
 LIST_THUMB_W = 350
 LIST_THUMB_H = 200
@@ -23,17 +31,21 @@ DOWNLOAD_WRAP_SIDE = 25
 DOWNLOAD_TEXT_FUDGE = 0
 
 # Layout sizing (pixels)
-LAYOUT_FULL_W = 1280
-LIST_BASE_W = 750
-LIST_MAX_W = 1000
+LAYOUT_FULL_W = 1320
+LIST_BASE_W = 800
 DETAIL_BASE_W = 300
 DOWNLOAD_W = 220
 
 __all__ = [
     "DEFAULT_GAME_ID",
     "ENV_GAME_ID_MAP",
+    "ENV_ROOT_CATEGORY_ID_MAP",
     "GB_API_URL_TMPL",
     "GB_MOD_API_TMPL",
+    "GB_SEARCH_URL",
+    "GB_CATEGORY_LIST_URL",
+    "GB_SUBCATEGORY_URL_TMPL",
+    "GB_LIST_PERPAGE",
     "LIST_THUMB_W",
     "LIST_THUMB_H",
     "RESIZE_DEBOUNCE_MS",
@@ -44,7 +56,6 @@ __all__ = [
     "DOWNLOAD_TEXT_FUDGE",
     "LAYOUT_FULL_W",
     "LIST_BASE_W",
-    "LIST_MAX_W",
     "DETAIL_BASE_W",
     "DOWNLOAD_W",
 ]
