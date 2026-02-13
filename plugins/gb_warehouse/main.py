@@ -20,10 +20,12 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 import constants as const
+from utils import DebouncedCall
 from api import ApiMixin
 from downloader import DownloadMixin
 from update_check import UpdateMixin
 from ui_list import ListMixin
+from settings import SettingsMixin
 from ui_detail import DetailMixin
 
 __version__ = "v1.4.1"
@@ -32,7 +34,7 @@ __version__ = "v1.4.1"
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin):
+class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, SettingsMixin):
     """列表 UI 控制器"""
 
     def __init__(self, warehouse_instance):
@@ -66,6 +68,10 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin):
         self.download_empty = None
         self.download_tasks = set()
         self._last_failed_page = None
+        self.current_game_id = None
+        self.current_env_name = None
+        self._env_prompted = False
+        self._game_id_window = None
 
         self.session = requests.Session()
         self.session.trust_env = False
@@ -120,9 +126,17 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin):
             width=8,
             command=self.go_next_page
         )
+        self.btn_source = ttkbootstrap.Button(
+            self.Frame_pager,
+            text="设置",
+            bootstyle=OUTLINE,
+            width=6,
+            command=self.open_game_id_settings
+        )
         self.btn_prev.pack(side=LEFT)
         self.page_label.pack(side=LEFT, padx=10)
         self.btn_next.pack(side=LEFT)
+        self.btn_source.pack(side=LEFT, padx=(10, 0))
         self.update_page_label()
 
         self.list_notice = ttkbootstrap.Frame(self.Frame_list, padding=(10, 6))
@@ -318,6 +332,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin):
             self.update_download_wraplength(self._pending_download_w)
             self._pending_download_w = None
         const.UI_RESIZE_PAUSED = False
+        DebouncedCall.flush_all()
 
     def apply_layout_resize(self, total_w):
         if total_w < const.LAYOUT_FULL_W:
@@ -442,7 +457,52 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin):
             except Exception:
                 self.is_visible = True
         if self.is_visible:
+            self.ensure_game_id(prompt_if_missing=True)
             self.prefetch_next_page()
+
+    def apply_game_id_change(self, game_id, reload=True):
+        game_id = self._normalize_game_id(game_id) or const.DEFAULT_GAME_ID
+        if self.current_game_id == game_id and self.page_cache:
+            return
+        core.log.info(f"(gb_warehouse) 切换数据源: {self.current_game_id} -> {game_id}")
+        self._clear_list_ui()
+        self.current_game_id = game_id
+        self.page_cache = {}
+        self.prefetching_pages = set()
+        self.image_cache = {}
+        self.tk_image_cache = {}
+        self.items = []
+        self.current_page = 1
+        self.page_count = None
+        try:
+            self.update_page_label()
+        except Exception:
+            pass
+        if reload and self.is_visible:
+            self.load_page(1)
+
+    def _clear_list_ui(self):
+        for item in self.items:
+            try:
+                item.destroy()
+            except Exception:
+                pass
+        self.items = []
+        if hasattr(self, "scroll_frame"):
+            try:
+                for child in self.scroll_frame.winfo_children():
+                    try:
+                        child.destroy()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            try:
+                self.scroll_frame.bin_update()
+                self.scroll_frame.w_canvas.yview_moveto(0)
+            except Exception:
+                pass
+
 
 
 # --- 挂载补丁 ---

@@ -7,16 +7,23 @@ import constants as const
 
 
 class ApiMixin:
-    def async_fetch_json(self, page, prefetch=False):
+    def async_fetch_json(self, page, prefetch=False, game_id=None):
         try:
-            url = const.GB_API_URL_TMPL.format(page=page)
+            if game_id is None:
+                getter = getattr(self, "get_game_id", None)
+                if callable(getter):
+                    game_id = getter()
+            if not game_id:
+                game_id = const.DEFAULT_GAME_ID
+            url = const.GB_API_URL_TMPL.format(game_id=game_id, page=page)
+            core.log.info(f"(gb_warehouse) 请求列表 API: game_id={game_id} page={page} prefetch={prefetch}")
             res = self.session.get(url, timeout=10)
             if res.status_code == 200:
                 payload = res.json()
                 records = payload.get("_aRecords", [])
                 meta = payload.get("_aMetadata", {})
                 page_count = meta.get("_nPageCount") or meta.get("_nPages")
-                self.master.after(0, lambda: self.on_page_loaded(page, records, page_count, prefetch))
+                self.master.after(0, lambda: self.on_page_loaded(page, records, page_count, prefetch, game_id))
                 self.master.after(0, lambda: self.hide_retry_notice() if hasattr(self, "hide_retry_notice") else None)
                 self.master.after(0, lambda: core.window.status.set_status("高清列表同步成功", 0))
             else:

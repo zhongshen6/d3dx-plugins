@@ -3,6 +3,7 @@
 
 import datetime
 import re
+import weakref
 
 
 def format_ts(ts, fmt="%y.%m.%d", empty="--.--.--"):
@@ -56,6 +57,8 @@ def merge_gb_explain(explain, mod_id, ts):
 
 
 class DebouncedCall:
+    _instances = weakref.WeakSet()
+
     def __init__(self, widget, delay_ms, is_paused_fn=None):
         self.widget = widget
         self.delay_ms = delay_ms
@@ -63,13 +66,20 @@ class DebouncedCall:
         self._job = None
         self._pending = None
         self._callback = None
+        self._has_pending = False
+        DebouncedCall._instances.add(self)
 
     def schedule(self, value, callback):
         self._pending = value
         self._callback = callback
+        self._has_pending = True
         if self.is_paused_fn():
-            if self._job is None:
-                self._job = self.widget.after(self.delay_ms, self._run)
+            if self._job is not None:
+                try:
+                    self.widget.after_cancel(self._job)
+                except Exception:
+                    pass
+                self._job = None
             return
         if self._job is not None:
             try:
@@ -85,17 +95,47 @@ class DebouncedCall:
             except Exception:
                 pass
             self._job = None
+        self._pending = None
+        self._callback = None
+        self._has_pending = False
+
+    def flush(self):
+        if self.is_paused_fn():
+            return False
+        if not self._has_pending:
+            return False
+        if self._job is not None:
+            try:
+                self.widget.after_cancel(self._job)
+            except Exception:
+                pass
+            self._job = None
+        value = self._pending
+        callback = self._callback
+        self._pending = None
+        self._callback = None
+        self._has_pending = False
+        if callback:
+            callback(value)
+        return True
+
+    @classmethod
+    def flush_all(cls):
+        for inst in list(cls._instances):
+            try:
+                inst.flush()
+            except Exception:
+                pass
 
     def _run(self):
         self._job = None
         if self.is_paused_fn():
-            try:
-                self._job = self.widget.after(self.delay_ms, self._run)
-            except Exception:
-                self._job = None
+            self._has_pending = True
             return
         value = self._pending
         callback = self._callback
         self._pending = None
+        self._callback = None
+        self._has_pending = False
         if callback:
             callback(value)

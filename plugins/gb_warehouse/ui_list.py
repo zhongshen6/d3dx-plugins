@@ -189,7 +189,8 @@ class ListMixin:
         if page < 1 or page in self.page_cache or page in self.prefetching_pages:
             return
         self.prefetching_pages.add(page)
-        core.construct.taskpool.newtask(self.async_fetch_json, (page, True), {}, False)
+        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
+        core.construct.taskpool.newtask(self.async_fetch_json, (page, True, game_id), {}, False)
 
     def trigger_load(self):
         self.load_page(1)
@@ -209,9 +210,12 @@ class ListMixin:
                 self.prefetch_next_page()
             return
         core.window.status.set_status(f"正在同步高清仓库列表... 第 {page} 页", 0)
-        core.construct.taskpool.newtask(self.async_fetch_json, (page, False), {}, False)
+        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
+        core.construct.taskpool.newtask(self.async_fetch_json, (page, False, game_id), {}, False)
 
-    def on_page_loaded(self, page, records, page_count=None, prefetch=False):
+    def on_page_loaded(self, page, records, page_count=None, prefetch=False, game_id=None):
+        if game_id and hasattr(self, "get_game_id") and game_id != self.get_game_id():
+            return
         if page_count:
             self.page_count = page_count
         self.page_cache[page] = records

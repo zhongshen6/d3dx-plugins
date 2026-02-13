@@ -372,7 +372,6 @@ class DetailMixin:
                 "url": url
             })
 
-        self.update_download_wraplength()
         self.master.after(0, self.update_download_wraplength)
 
     def set_download_empty(self, message):
@@ -413,6 +412,9 @@ class DetailMixin:
 
     def update_download_wraplength(self, width=None):
         if not hasattr(self, "download_inner"):
+            return
+        if width is not None:
+            self._apply_download_wrap(width)
             return
         if not hasattr(self, "_download_wrap_debounce"):
             self._download_wrap_debounce = DebouncedCall(
@@ -595,7 +597,10 @@ class DetailMixin:
                 const.RESIZE_DEBOUNCE_MS,
                 lambda: const.UI_RESIZE_PAUSED,
             )
-        self._detail_wrap_debounce.schedule(width, self._apply_detail_text_wrap)
+        if width is not None:
+            self._apply_detail_text_wrap(width)
+        else:
+            self._detail_wrap_debounce.schedule(width, self._apply_detail_text_wrap)
 
     def _apply_detail_text_wrap(self, width=None):
         wrap_width = self.get_detail_text_wrap_width(width)

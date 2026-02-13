@@ -1,7 +1,13 @@
 # Licensed under the GNU General Public License v3.0
 # d3dxSkinManage Plugin: gb_warehouse (Constants)
 
-GB_API_URL_TMPL = "https://gamebanana.com/apiv11/Game/8552/Subfeed?_sSort=default&_csvModelInclusions=Mod&_nPage={page}"
+DEFAULT_GAME_ID = 8552
+ENV_GAME_ID_MAP = {
+    "GenshinImpact": 8552,
+    "StarRail": 18366,
+}
+
+GB_API_URL_TMPL = "https://gamebanana.com/apiv11/Game/{game_id}/Subfeed?_sSort=default&_csvModelInclusions=Mod&_nPage={page}"
 GB_MOD_API_TMPL = "https://gamebanana.com/apiv11/Mod/{mod_id}/ProfilePage"
 
 LIST_THUMB_W = 350
@@ -24,6 +30,8 @@ DETAIL_BASE_W = 300
 DOWNLOAD_W = 220
 
 __all__ = [
+    "DEFAULT_GAME_ID",
+    "ENV_GAME_ID_MAP",
     "GB_API_URL_TMPL",
     "GB_MOD_API_TMPL",
     "LIST_THUMB_W",
