@@ -16,44 +16,13 @@ class CategoryMixin:
     _word_table = None
     _word_index = None
     _word_lock = threading.Lock()
+    _word_update_running = False
 
-    _word_sources = [
-        {
-            "game": "GI",
-            "name": "原神角色",
-            "url": "https://api.hakush.in/gi/data/character.json",
-            "keys": ["CHS", "EN", "JP", "KR"],
-            "clean": False
-        },
-        {
-            "game": "GI",
-            "name": "原神武器",
-            "url": "https://api.hakush.in/gi/data/weapon.json",
-            "keys": ["CHS", "EN", "JP", "KR"],
-            "clean": False
-        },
-        {
-            "game": "HSR",
-            "name": "星穹铁道角色",
-            "url": "https://api.hakush.in/hsr/data/character.json",
-            "keys": ["cn", "en", "jp", "kr"],
-            "clean": True
-        },
-        {
-            "game": "ZZZ",
-            "name": "绝区零角色",
-            "url": "https://api.hakush.in/zzz/data/character.json",
-            "keys": ["CHS", "EN", "JA", "KO"],
-            "clean": False
-        },
-        {
-            "game": "ZZZ",
-            "name": "绝区零音擎",
-            "url": "https://api.hakush.in/zzz/data/weapon.json",
-            "keys": ["CHS", "EN", "JA", "KO"],
-            "clean": False
-        }
-    ]
+    _word_games = (
+        ("genshin", "原神"),
+        ("starrail", "星穹铁道"),
+    )
+    _word_langs = ("chs", "en", "jp")
 
     def open_category_browser(self):
         root_id = self.get_root_category_id() if hasattr(self, "get_root_category_id") else None
@@ -111,11 +80,17 @@ class CategoryMixin:
         btn_row = ttkbootstrap.Frame(frame)
         btn_row.pack(fill=X, pady=(8, 0))
         btn_update = ttkbootstrap.Button(btn_row, text="更新翻译表", bootstyle=INFO, command=self._update_words_async)
+        self._category_btn_update = btn_update
         btn_open = ttkbootstrap.Button(btn_row, text="打开分类", bootstyle=SUCCESS, command=self._open_selected_category)
         btn_close = ttkbootstrap.Button(btn_row, text="关闭", bootstyle=OUTLINE, command=win.destroy)
         btn_close.pack(side=RIGHT)
         btn_open.pack(side=RIGHT, padx=(0, 8))
         btn_update.pack(side=LEFT)
+        if self._word_update_running:
+            try:
+                btn_update.configure(state=DISABLED)
+            except Exception:
+                pass
 
         tree.bind("<Double-1>", lambda *_: self._open_selected_category(), add="+")
 
@@ -236,10 +211,61 @@ class CategoryMixin:
     def _word_file_path(self):
         return os.path.join(os.path.dirname(__file__), "word.json")
 
-    def _clean_hsr_text(self, text):
-        if not text or not isinstance(text, str):
-            return text
-        return re.sub(r'\{RUBY_[BE]#.*?\}', '', text)
+    def _set_category_update_button_state(self, enabled):
+        btn = getattr(self, "_category_btn_update", None)
+        if not btn or not btn.winfo_exists():
+            return
+        try:
+            if enabled:
+                btn.configure(state=NORMAL, text="更新翻译表")
+            else:
+                btn.configure(state=DISABLED, text="更新中...")
+        except Exception:
+            pass
+
+    def _word_dict_url(self, game, lang):
+        return f"https://api.uigf.org/dict/{game}/{lang}.json"
+
+    def _fetch_word_dict(self, game, lang):
+        import requests
+
+        url = self._word_dict_url(game, lang)
+        try:
+            res = requests.get(url, timeout=15)
+        except Exception as e:
+            core.log.error(f"(gb_warehouse) 翻译表请求失败: {game}/{lang} {e}")
+            return None
+
+        if res.status_code != 200:
+            core.log.error(f"(gb_warehouse) 翻译表获取失败: {game}/{lang} status={res.status_code}")
+            return None
+        try:
+            data = res.json()
+        except Exception as e:
+            core.log.error(f"(gb_warehouse) 翻译表 JSON 解析失败: {game}/{lang} {e}")
+            return None
+
+        if not isinstance(data, dict):
+            core.log.error(f"(gb_warehouse) 翻译表数据类型异常: {game}/{lang} type={type(data).__name__}")
+            return None
+        return data
+
+    def _invert_name_id_map(self, name_to_id, game, lang):
+        id_to_name = {}
+        for name, item_id in name_to_id.items():
+            if not isinstance(name, str):
+                continue
+            name = name.strip()
+            if not name:
+                continue
+            try:
+                item_id = int(item_id)
+            except Exception:
+                continue
+            if item_id not in id_to_name:
+                id_to_name[item_id] = name
+        core.log.info(f"(gb_warehouse) 翻译表已加载: {game}/{lang} {len(id_to_name)} 条")
+        return id_to_name
 
     def _normalize_key(self, text):
         if not text:
@@ -282,61 +308,92 @@ class CategoryMixin:
             self._word_index = {k: v[0] for k, v in index.items()}
 
     def _update_words_async(self):
+        if self._word_update_running:
+            return
+        self._word_update_running = True
+        self._set_category_update_button_state(False)
         t = threading.Thread(target=self._update_words_json, daemon=True)
         t.start()
 
+    def _finish_update_words(self):
+        self._word_update_running = False
+        self._set_category_update_button_state(True)
+
     def _update_words_json(self):
-        core.log.info("(gb_warehouse) 开始更新翻译表")
-        new_table = []
-        seen = set()
         try:
-            import requests
-            for src in self._word_sources:
-                res = requests.get(src["url"], timeout=15)
-                if res.status_code != 200:
-                    core.log.error(f"(gb_warehouse) 翻译表获取失败: {src['name']} status={res.status_code}")
+            core.log.info("(gb_warehouse) 开始更新翻译表")
+            new_table = []
+            entry_by_chs = {}
+            for game, game_name in self._word_games:
+                lang_maps = {}
+                for lang in self._word_langs:
+                    payload = self._fetch_word_dict(game, lang)
+                    if payload is None:
+                        continue
+                    id_map = self._invert_name_id_map(payload, game, lang)
+                    if id_map:
+                        lang_maps[lang] = id_map
+
+                if not lang_maps:
+                    core.log.error(f"(gb_warehouse) 翻译表不可用: {game_name} 三种语言均下载失败")
                     continue
-                data = res.json()
-                for entry_id in data:
-                    item = data[entry_id]
-                    chs_key = "CHS" if "CHS" in item else ("cn" if "cn" in item else None)
-                    if not chs_key:
+
+                missing = [lang for lang in self._word_langs if lang not in lang_maps]
+                if missing:
+                    core.log.warn(f"(gb_warehouse) 翻译表部分缺失: {game_name} 缺少 {','.join(missing)}")
+
+                all_ids = set()
+                for id_map in lang_maps.values():
+                    all_ids.update(id_map.keys())
+
+                for item_id in sorted(all_ids):
+                    name_chs = lang_maps.get("chs", {}).get(item_id)
+                    name_en = lang_maps.get("en", {}).get(item_id)
+                    name_jp = lang_maps.get("jp", {}).get(item_id)
+
+                    chs_name = name_chs or name_jp or name_en
+                    if not chs_name:
                         continue
-                    chs_name = item.get(chs_key)
-                    if src["clean"]:
-                        chs_name = self._clean_hsr_text(chs_name)
-                    if not chs_name or chs_name in seen:
-                        continue
+
                     alts = []
-                    for k in src["keys"]:
-                        val = item.get(k)
-                        if val:
-                            if src["clean"]:
-                                val = self._clean_hsr_text(val)
+                    for val in (name_chs, name_en, name_jp):
+                        if val and val not in alts:
                             alts.append(val)
-                    if alts:
-                        new_table.append({"chs": chs_name, "alts": list(set(alts))})
-                        seen.add(chs_name)
+                    if not alts:
+                        continue
+
+                    entry = entry_by_chs.get(chs_name)
+                    if entry is None:
+                        entry = {"chs": chs_name, "alts": list(alts)}
+                        entry_by_chs[chs_name] = entry
+                        new_table.append(entry)
+                    else:
+                        for val in alts:
+                            if val not in entry["alts"]:
+                                entry["alts"].append(val)
+            if not new_table:
+                core.log.error("(gb_warehouse) 翻译表为空")
+                return
+            try:
+                with open(self._word_file_path(), "w", encoding="utf-8") as f:
+                    json.dump(new_table, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                core.log.error(f"(gb_warehouse) 保存翻译表失败: {e}")
+                return
+
+            self._set_word_table(new_table)
+            core.log.info(f"(gb_warehouse) 翻译表更新完成: {len(new_table)} 条")
+            try:
+                self.master.after(0, lambda: self._refresh_category_names())
+            except Exception:
+                pass
         except Exception as e:
             core.log.error(f"(gb_warehouse) 更新翻译表失败: {e}")
-            return
-
-        if not new_table:
-            core.log.error("(gb_warehouse) 翻译表为空")
-            return
-        try:
-            with open(self._word_file_path(), "w", encoding="utf-8") as f:
-                json.dump(new_table, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            core.log.error(f"(gb_warehouse) 保存翻译表失败: {e}")
-            return
-
-        self._set_word_table(new_table)
-        core.log.info(f"(gb_warehouse) 翻译表更新完成: {len(new_table)} 条")
-        try:
-            self.master.after(0, lambda: self._refresh_category_names())
-        except Exception:
-            pass
+        finally:
+            try:
+                self.master.after(0, self._finish_update_words)
+            except Exception:
+                self._finish_update_words()
 
     def _translate_name(self, name):
         key = self._normalize_key(name)
