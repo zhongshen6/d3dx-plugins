@@ -29,8 +29,8 @@ class GBListItem(ttkbootstrap.Frame):
         )
 
         # 主容器：fill=X 确保宽度随父容器变化
-        self.container = ttkbootstrap.Frame(self, padding=10, bootstyle=SECONDARY)
-        self.container.pack(fill=X, padx=5, pady=5)
+        self.container = ttkbootstrap.Frame(self, padding=0, bootstyle=SECONDARY)
+        self.container.pack(fill=X, padx=0, pady=0)
 
         # 左侧大图容器 - 固定 450x250
         self.img_container = ttkbootstrap.Frame(
@@ -64,13 +64,26 @@ class GBListItem(ttkbootstrap.Frame):
         self.name_text = name
         self.name_font = tkfont.Font(font=self.name_label.cget("font"))
 
-        # 2. 作者与浏览量 (移除了点赞)
+        # 2. 作者与浏览量（保持一个信息块）+ 右侧 NSFW 徽标
         submitter = data.get("_aSubmitter", {})
         author = submitter.get("_sName", "Anon") if isinstance(submitter, dict) else "Anon"
         views = data.get("_nViewCount", 0)
+        is_nsfw = bool(data.get("_bHasContentRatings", False))
 
         ts = data.get("_tsDateUpdated") or data.get("_tsDateModified") or data.get("_tsDateAdded")
         updated = format_ts(ts)
+        self.nsfw_label = None
+        if is_nsfw:
+            self.nsfw_label = ttkbootstrap.Label(
+                self.info_frame,
+                text="NSFW",
+                bootstyle=DANGER,
+                padding=(6, 1),
+                anchor=CENTER
+            )
+            # Use absolute positioning so the badge does not consume layout space.
+            self.nsfw_label.place(x=0, y=0)
+
         detail_text = f"👤{author}\n👁️{views}\n🕒{updated}"
         self.detail_label = ttkbootstrap.Label(
             self.info_frame,
@@ -83,6 +96,8 @@ class GBListItem(ttkbootstrap.Frame):
 
         # 监听信息区域大小变化，动态调整文字换行宽度
         self.info_frame.bind("<Configure>", self.on_info_resize)
+        if self.nsfw_label is not None:
+            self.after(0, self.update_nsfw_badge_position)
 
     def on_info_resize(self, event):
         """动态更新标签的换行宽度"""
@@ -99,6 +114,18 @@ class GBListItem(ttkbootstrap.Frame):
         self.name_label.configure(wraplength=new_wraplength)
         self.detail_label.configure(wraplength=new_wraplength)
         self.update_name_ellipsis(new_wraplength)
+        self.update_nsfw_badge_position()
+
+    def update_nsfw_badge_position(self):
+        if not self.nsfw_label or self.is_destroyed:
+            return
+        try:
+            self.info_frame.update_idletasks()
+            self.name_label.update_idletasks()
+            top = self.name_label.winfo_y() + self.name_label.winfo_height() + 2
+            self.nsfw_label.place(relx=1.0, x=-2, y=top, anchor=NE)
+        except Exception:
+            pass
 
     def update_name_ellipsis(self, wraplength):
         text = self.name_text or ""
@@ -297,7 +324,7 @@ class ListMixin:
 
         for rec in records:
             item_widget = GBListItem(self.scroll_frame, rec, self.on_item_image_click)
-            item_widget.pack(side=TOP, fill=X, padx=15, pady=8)
+            item_widget.pack(side=TOP, fill=X, padx=(0, 15), pady=8)
             self.items.append(item_widget)
 
         self.scroll_frame.bin_update()
