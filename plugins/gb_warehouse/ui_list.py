@@ -13,6 +13,8 @@ import core
 import constants as const
 from utils import DebouncedCall, format_ts
 
+LOG_TAG = "(gb_warehouse/list)"
+
 
 class GBListItem(ttkbootstrap.Frame):
     """单个 Mod 列表项组件 - 支持响应式宽度和换行"""
@@ -215,9 +217,9 @@ class ListMixin:
     def on_item_image_click(self, record):
         mod_id = record.get("_idRow")
         name = record.get("_sName", "")
-        core.log.info(f"(gb_warehouse) 详情点击: id={mod_id} name={name}")
+        core.log.debug(f"{LOG_TAG} detail.open_click mod_id={mod_id} name={name}")
         if not mod_id:
-            core.log.error("(gb_warehouse) 详情点击缺少 mod_id")
+            core.log.warn(f"{LOG_TAG} detail.open_click_missing_id name={name}")
             return
         self.load_detail(mod_id)
 
@@ -278,11 +280,13 @@ class ListMixin:
         self.current_page = page
         cache_key = self._get_cache_key(page)
         if cache_key in self.page_cache:
+            core.log.debug(f"{LOG_TAG} page.cache_hit page={page} mode={self.list_mode}")
             self.render_list(self.page_cache[cache_key], page)
             if self.is_visible:
                 self.prefetch_next_page()
             return
-        core.window.status.set_status(f"正在同步高清仓库列表... 第 {page} 页", 0)
+        self._set_status(f"正在加载第 {page} 页...", 2)
+        core.log.debug(f"{LOG_TAG} page.fetch page={page} mode={self.list_mode}")
         game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
         mode = getattr(self, "list_mode", "list")
         core.construct.taskpool.newtask(
@@ -315,6 +319,7 @@ class ListMixin:
         if page is not None:
             self.current_page = page
             self.update_page_label()
+        core.log.debug(f"{LOG_TAG} render.start page={self.current_page} count={len(records)}")
         for item in self.items:
             try:
                 item.destroy()
@@ -382,4 +387,4 @@ class ListMixin:
             if cached is not None and item_widget is not None:
                 self.master.after(0, lambda: self.apply_cached_image(item_widget, img_url, cached))
         except Exception as e:
-            core.log.debug(f"(gb_warehouse) 图片获取失败: {e}")
+            core.log.debug(f"{LOG_TAG} cover.fetch_failed err={e}")

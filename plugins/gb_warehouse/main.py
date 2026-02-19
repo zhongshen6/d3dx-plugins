@@ -30,6 +30,7 @@ from categories import CategoryMixin
 from ui_detail import DetailMixin
 
 __version__ = "v1.4.1"
+LOG_TAG = "(gb_warehouse/main)"
 
 # 抑制 InsecureRequestWarning 警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -92,6 +93,33 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         })
         adapter = HTTPAdapter(pool_connections=20, pool_maxsize=30)
         self.session.mount("https://", adapter)
+
+    def _set_status(self, message, level=0):
+        status = getattr(core.window, "status", None)
+        if not status:
+            return
+        text = f"[GB仓库] {message}"
+        try:
+            status.set_status(text, int(level))
+        except Exception:
+            pass
+
+    def _set_progress(self, value):
+        status = getattr(core.window, "status", None)
+        if not status:
+            return
+        try:
+            ivalue = int(value)
+        except Exception:
+            return
+        if ivalue < 0:
+            ivalue = 0
+        if ivalue > 100:
+            ivalue = 100
+        try:
+            status.set_progress(ivalue)
+        except Exception:
+            pass
 
     def setup_ui(self):
         for widget in self.master.winfo_children():
@@ -514,7 +542,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         game_id = self._normalize_game_id(game_id) or const.DEFAULT_GAME_ID
         if self.current_game_id == game_id and self.page_cache:
             return
-        core.log.info(f"(gb_warehouse) 切换数据源: {self.current_game_id} -> {game_id}")
+        core.log.info(f"{LOG_TAG} source.changed from={self.current_game_id} to={game_id}")
         self._clear_list_ui()
         self.current_game_id = game_id
         self.page_cache = {}
@@ -621,7 +649,7 @@ def patched_initial(self):
 
 
 def main():
-    core.log.info(f"GB Warehouse {__version__} (HD Vertical Info Edition) 已加载")
+    core.log.info(f"{LOG_TAG} plugin.loaded version={__version__}")
     ModsWarehouse.install = patched_install
     ModsWarehouse.initial = patched_initial
 

@@ -7,6 +7,8 @@ from ttkbootstrap.constants import *
 import core
 import constants as const
 
+LOG_TAG = "(gb_warehouse/settings)"
+
 
 class SettingsMixin:
     def _get_env_name(self):
@@ -40,7 +42,7 @@ class SettingsMixin:
         if not conf:
             return
         conf.gb_game_id = int(game_id)
-        core.log.info(f"(gb_warehouse) 保存数据源: env={self._get_env_name()} id={game_id}")
+        core.log.debug(f"{LOG_TAG} game_id.saved env={self._get_env_name()} id={game_id}")
 
     def _get_saved_root_category_id(self):
         conf = getattr(core.userenv, "configuration", None)
@@ -54,7 +56,7 @@ class SettingsMixin:
         if not conf:
             return
         conf.gb_root_category_id = int(category_id)
-        core.log.info(f"(gb_warehouse) 保存根分类: env={self._get_env_name()} id={category_id}")
+        core.log.debug(f"{LOG_TAG} root_category.saved env={self._get_env_name()} id={category_id}")
 
     def get_root_category_id(self):
         saved = self._get_saved_root_category_id()
@@ -86,7 +88,7 @@ class SettingsMixin:
     def ensure_game_id(self, prompt_if_missing=False):
         env_name = self._get_env_name()
         if self.current_env_name != env_name:
-            core.log.info(f"(gb_warehouse) 环境变更: {self.current_env_name} -> {env_name}")
+            core.log.debug(f"{LOG_TAG} env.changed from={self.current_env_name} to={env_name}")
             self.current_env_name = env_name
             self.current_game_id = None
             self._env_prompted = False
@@ -173,7 +175,7 @@ class SettingsMixin:
                 root_id = int(root_text)
             else:
                 root_id = None
-            core.log.info(f"(gb_warehouse) 手动设置数据源: env={env_name} id={game_id}")
+            core.log.info(f"{LOG_TAG} game_id.manual_set env={env_name} id={game_id} root={root_id}")
             self._set_saved_game_id(game_id)
             if root_id is not None:
                 self._set_saved_root_category_id(root_id)

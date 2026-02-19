@@ -13,6 +13,7 @@ from constant import K
 from utils import merge_gb_explain, parse_gb_explain
 
 CMD_UNLOAD = "--X--"
+LOG_TAG = "(gb_warehouse/update)"
 
 
 class UpdateMixin:
@@ -151,7 +152,7 @@ class UpdateMixin:
             return
         explain = item.get(K.INDEX.EXPLAIN) or ""
         mod_id, _last = parse_gb_explain(explain)
-        core.log.info(f"(gb_warehouse) 详情按钮检测: sha={sha} mod_id={mod_id} last={_last}")
+        core.log.debug(f"{LOG_TAG} detail_button.check sha={sha} mod_id={mod_id} last={_last}")
         try:
             btn.configure(state=NORMAL if mod_id else DISABLED)
         except Exception:
@@ -159,11 +160,12 @@ class UpdateMixin:
 
     def check_gb_updates(self):
         if getattr(self, "_gb_update_running", False):
-            core.window.status.set_status("更新检查正在进行中", 1)
+            self._set_status("更新检查正在进行中", 2)
             return
         self._gb_update_running = True
-        core.window.status.set_status("正在检查更新...", 0)
-        core.log.info("(gb_warehouse) 开始检查更新")
+        self._set_progress(0)
+        self._set_status("正在检查更新...", 2)
+        core.log.info(f"{LOG_TAG} check.start")
         t = threading.Thread(target=self._async_check_gb_updates, daemon=True)
         t.start()
 
@@ -172,7 +174,7 @@ class UpdateMixin:
         updated_objects = set()
         try:
             targets = self._collect_gb_targets()
-            core.log.info(f"(gb_warehouse) 需要检查的 GB Mod 数量: {len(targets)}")
+            core.log.debug(f"{LOG_TAG} check.targets count={len(targets)}")
             total = len(targets)
             for idx, (sha, mod_id, last_ts, obj_name) in enumerate(targets, start=1):
                 remote_ts = self._fetch_remote_ts(mod_id)
@@ -180,9 +182,13 @@ class UpdateMixin:
                     updated_shas.add(sha)
                     if obj_name:
                         updated_objects.add(obj_name)
+                pct = int(idx * 100 / total) if total else 100
+                self.master.after(0, lambda p=pct: self._set_progress(p))
                 if idx % 3 == 0:
                     msg = f"更新检查中 {idx}/{total}" if total else "更新检查中"
-                    self.master.after(0, lambda m=msg: core.window.status.set_status(m, 0))
+                    self.master.after(0, lambda m=msg: self._set_status(m, 2))
+            if total == 0:
+                self.master.after(0, lambda: self._set_progress(100))
         finally:
             self.master.after(0, lambda: self._apply_update_results(updated_shas, updated_objects))
 
@@ -199,7 +205,7 @@ class UpdateMixin:
             explain = item.get(K.INDEX.EXPLAIN) or ""
             mod_id, last_ts = parse_gb_explain(explain)
             if not mod_id and "[GB]" in explain:
-                core.log.warn(f"(gb_warehouse) GB 标记解析失败: sha={sha} explain={explain}")
+                core.log.warn(f"{LOG_TAG} mark.parse_failed sha={sha}")
             if not mod_id or not last_ts:
                 continue
             obj_name = item.get(K.INDEX.OBJECT, "")
@@ -211,12 +217,12 @@ class UpdateMixin:
             url = const.GB_MOD_API_TMPL.format(mod_id=mod_id)
             res = self.session.get(url, timeout=10)
             if res.status_code != 200:
-                core.log.warn(f"(gb_warehouse) 详情请求失败: id={mod_id} status={res.status_code}")
+                core.log.debug(f"{LOG_TAG} remote_ts.http_error mod_id={mod_id} status={res.status_code}")
                 return 0
             data = res.json()
             return data.get("_tsDateUpdated") or data.get("_tsDateModified") or data.get("_tsDateAdded") or 0
         except Exception:
-            core.log.warn(f"(gb_warehouse) 详情请求异常: id={mod_id}")
+            core.log.debug(f"{LOG_TAG} remote_ts.request_failed mod_id={mod_id}")
             return 0
 
     def _apply_update_results(self, updated_shas, updated_objects):
@@ -226,8 +232,15 @@ class UpdateMixin:
                 "objects": set(updated_objects),
             }
             count = len(updated_shas)
+            level = 2 if count else 0
             msg = f"更新检查完成：{count} 个有更新" if count else "更新检查完成：未发现更新"
-            core.window.status.set_status(msg, 0 if count == 0 else 1)
+            self._set_progress(100)
+            self._set_status(msg, level)
+            try:
+                self.master.after(1200, lambda: self._set_progress(0))
+            except Exception:
+                self._set_progress(0)
+            core.log.info(f"{LOG_TAG} check.done updated={count}")
 
             mods_manage = getattr(core.window.interface, "mods_manage", None)
             if mods_manage:
@@ -252,7 +265,7 @@ class UpdateMixin:
         explain = item.get(K.INDEX.EXPLAIN) or ""
         mod_id, _last = parse_gb_explain(explain)
         if not mod_id:
-            core.log.warn(f"(gb_warehouse) 打开详情失败: sha={sha} 未找到 GB 标记")
+            core.log.warn(f"{LOG_TAG} detail.open_failed_missing_mark sha={sha}")
             return
 
         new_explain = merge_gb_explain(explain, mod_id, int(time.time()))

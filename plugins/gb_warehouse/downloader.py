@@ -12,21 +12,24 @@ import core
 from constant import K
 from utils import merge_gb_explain
 
+LOG_TAG = "(gb_warehouse/download)"
+
 
 class DownloadMixin:
     def download_and_import(self, url, filename=None, mod_id=None, ui=None):
         if not url:
             return
-        core.log.info(f"(gb_warehouse) 下载请求: url={url} mod_id={mod_id} name={filename}")
+        core.log.info(f"{LOG_TAG} start mod_id={mod_id} name={filename}")
+        core.log.debug(f"{LOG_TAG} start.url mod_id={mod_id} url={url}")
         if not hasattr(self, "download_tasks"):
             self.download_tasks = set()
         if url in self.download_tasks:
-            core.window.status.set_status("下载任务已存在", 1)
+            self._set_status("下载任务已存在", 2)
             return
 
         self.download_tasks.add(url)
         display_name = filename or self._guess_filename(url, None) or "文件"
-        core.window.status.set_status(f"正在下载: {display_name}", 0)
+        self._set_status(f"正在下载: {display_name}", 2)
         if ui:
             try:
                 ui.get("enabled")(False)
@@ -37,7 +40,7 @@ class DownloadMixin:
         taskpool = getattr(core.construct, "taskpool", None)
         if not taskpool:
             self.download_tasks.discard(url)
-            core.window.status.set_status("任务池不可用，无法下载", 1)
+            self._set_status("任务池不可用，无法下载", 1)
             if ui:
                 try:
                     ui.get("hide_progress")(0)
@@ -51,15 +54,16 @@ class DownloadMixin:
         try:
             path = self._download_file(url, filename, ui)
             if not path:
-                self.master.after(0, lambda: core.window.status.set_status("下载失败", 1))
+                self.master.after(0, lambda: self._set_status("下载失败", 1))
                 if ui:
                     try:
                         ui.get("hide_progress")(0)
                     except Exception:
                         pass
                 return
-            core.log.info(f"(gb_warehouse) 下载完成: {path}")
-            self.master.after(0, lambda: core.window.status.set_status("下载完成，打开导入窗口", 0))
+            core.log.info(f"{LOG_TAG} done mod_id={mod_id} file={os.path.basename(path)}")
+            core.log.debug(f"{LOG_TAG} done.path path={path}")
+            self.master.after(0, lambda: self._set_status("下载完成，打开导入窗口", 0))
             if ui:
                 try:
                     ui.get("progress")(100)
@@ -70,11 +74,11 @@ class DownloadMixin:
             if mod_id:
                 sha = self._calc_sha(path)
                 if sha:
-                    core.log.info(f"(gb_warehouse) 计算 SHA: {sha}")
+                    core.log.debug(f"{LOG_TAG} sha.ok value={sha}")
                     self._schedule_import_mark(sha, mod_id)
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 下载失败: {e}")
-            self.master.after(0, lambda: core.window.status.set_status("下载失败", 1))
+            core.log.error(f"{LOG_TAG} failed err={e}")
+            self.master.after(0, lambda: self._set_status("下载失败", 1))
             if ui:
                 try:
                     ui.get("hide_progress")(0)
@@ -97,7 +101,7 @@ class DownloadMixin:
 
         res = session.get(url, timeout=30, stream=True, allow_redirects=True)
         if res.status_code != 200:
-            core.log.error(f"(gb_warehouse) 下载状态码异常: {res.status_code}")
+            core.log.warn(f"{LOG_TAG} http_error status={res.status_code} url={url}")
             if ui:
                 try:
                     ui.get("hide_progress")(0)
@@ -152,7 +156,7 @@ class DownloadMixin:
     def _open_import_window(self, path):
         add_mod2 = getattr(core.additional, "add_mod2", None)
         if not add_mod2 or not hasattr(add_mod2, "add_mods"):
-            core.window.status.set_status("导入模块不可用", 1)
+            self._set_status("导入模块不可用", 1)
             return
         add_mod2.add_mods([path])
 
@@ -164,7 +168,7 @@ class DownloadMixin:
                     sha1.update(chunk)
             return sha1.hexdigest().upper()
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 计算 SHA 失败: {e}")
+            core.log.error(f"{LOG_TAG} sha.failed err={e}")
             return None
 
     def _schedule_import_mark(self, sha, mod_id):
@@ -177,7 +181,7 @@ class DownloadMixin:
             return
         self.pending_gb_marks.add(key)
         ts = int(time.time())
-        core.log.info(f"(gb_warehouse) 等待导入完成: sha={sha} id={mod_id} ts={ts}")
+        core.log.debug(f"{LOG_TAG} mark.wait sha={sha} mod_id={mod_id} ts={ts}")
         t = threading.Thread(
             target=self._wait_and_mark_import,
             args=(sha, mod_id, ts, key),
@@ -191,15 +195,15 @@ class DownloadMixin:
             while time.time() < deadline:
                 item = core.module.mods_index.get_item(sha)
                 if item:
-                    core.log.info(f"(gb_warehouse) 导入完成检测到: sha={sha}")
+                    core.log.debug(f"{LOG_TAG} mark.detected sha={sha}")
                     explain = item.get(K.INDEX.EXPLAIN) or ""
                     updated = merge_gb_explain(explain, mod_id, ts)
                     if updated != explain:
                         core.module.mods_index.item_data_update(sha, {K.INDEX.EXPLAIN: updated})
-                        core.log.info(f"(gb_warehouse) 写入附加信息: sha={sha} id={mod_id}")
+                        core.log.debug(f"{LOG_TAG} mark.saved sha={sha} mod_id={mod_id}")
                     return
                 time.sleep(1.0)
-            core.log.warn(f"(gb_warehouse) 等待导入超时: sha={sha} id={mod_id}")
+            core.log.warn(f"{LOG_TAG} mark.timeout sha={sha} mod_id={mod_id}")
         finally:
             if hasattr(self, "pending_gb_marks"):
                 self.pending_gb_marks.discard(key)

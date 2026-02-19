@@ -11,6 +11,8 @@ from ttkbootstrap.constants import *
 import core
 import constants as const
 
+LOG_TAG = "(gb_warehouse/category)"
+
 
 class CategoryMixin:
     _word_table = None
@@ -31,7 +33,7 @@ class CategoryMixin:
             if hasattr(self, "open_game_id_settings"):
                 self.open_game_id_settings(force_prompt=True)
             return
-        core.log.info(f"(gb_warehouse) 打开子分类列表: root_id={root_id}")
+        core.log.debug(f"{LOG_TAG} browser.open root_id={root_id}")
 
         if getattr(self, "_category_window", None) and self._category_window.winfo_exists():
             try:
@@ -114,23 +116,23 @@ class CategoryMixin:
     def _async_fetch_subcategories(self, root_id, token):
         try:
             url = const.GB_SUBCATEGORY_URL_TMPL.format(root_id=root_id)
-            core.log.info(f"(gb_warehouse) 请求子分类 API: {url}")
+            core.log.debug(f"{LOG_TAG} subcat.request root_id={root_id}")
             res = self.session.get(url, timeout=10)
             if res.status_code == 200:
                 try:
                     payload = res.json()
                 except Exception as e:
-                    core.log.error(f"(gb_warehouse) 子分类 JSON 解析失败: {e}")
+                    core.log.warn(f"{LOG_TAG} subcat.json_error root_id={root_id} err={e}")
                     self.master.after(0, lambda: self._render_subcategories(token, []))
                     return
                 categories = self._parse_subcategories(payload)
-                core.log.info(f"(gb_warehouse) 子分类数量: {len(categories)}")
+                core.log.debug(f"{LOG_TAG} subcat.loaded root_id={root_id} count={len(categories)}")
                 self.master.after(0, lambda: self._render_subcategories(token, categories))
             else:
-                core.log.error(f"(gb_warehouse) 子分类请求失败: status={res.status_code}")
+                core.log.warn(f"{LOG_TAG} subcat.http_error root_id={root_id} status={res.status_code}")
                 self.master.after(0, lambda: self._render_subcategories(token, []))
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 获取子分类失败: {e}")
+            core.log.error(f"{LOG_TAG} subcat.exception root_id={root_id} err={e}")
             self.master.after(0, lambda: self._render_subcategories(token, []))
 
     def _parse_subcategories(self, payload):
@@ -140,7 +142,7 @@ class CategoryMixin:
         elif isinstance(payload, dict):
             items = payload.get("_aRecords") or payload.get("_aSubCategories") or payload.get("aRecords") or []
         else:
-            core.log.error(f"(gb_warehouse) 子分类数据类型异常: {type(payload).__name__}")
+            core.log.warn(f"{LOG_TAG} subcat.invalid_payload type={type(payload).__name__}")
         results = []
         for item in items:
             if not isinstance(item, dict):
@@ -233,20 +235,20 @@ class CategoryMixin:
         try:
             res = requests.get(url, timeout=15)
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 翻译表请求失败: {game}/{lang} {e}")
+            core.log.debug(f"{LOG_TAG} dict.request_failed game={game} lang={lang} err={e}")
             return None
 
         if res.status_code != 200:
-            core.log.error(f"(gb_warehouse) 翻译表获取失败: {game}/{lang} status={res.status_code}")
+            core.log.debug(f"{LOG_TAG} dict.http_error game={game} lang={lang} status={res.status_code}")
             return None
         try:
             data = res.json()
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 翻译表 JSON 解析失败: {game}/{lang} {e}")
+            core.log.debug(f"{LOG_TAG} dict.json_error game={game} lang={lang} err={e}")
             return None
 
         if not isinstance(data, dict):
-            core.log.error(f"(gb_warehouse) 翻译表数据类型异常: {game}/{lang} type={type(data).__name__}")
+            core.log.debug(f"{LOG_TAG} dict.invalid_payload game={game} lang={lang} type={type(data).__name__}")
             return None
         return data
 
@@ -264,7 +266,7 @@ class CategoryMixin:
                 continue
             if item_id not in id_to_name:
                 id_to_name[item_id] = name
-        core.log.info(f"(gb_warehouse) 翻译表已加载: {game}/{lang} {len(id_to_name)} 条")
+        core.log.debug(f"{LOG_TAG} dict.loaded game={game} lang={lang} count={len(id_to_name)}")
         return id_to_name
 
     def _normalize_key(self, text):
@@ -283,7 +285,7 @@ class CategoryMixin:
                 self._set_word_table(data)
                 return
             except Exception as e:
-                core.log.error(f"(gb_warehouse) 读取翻译表失败: {e}")
+                core.log.warn(f"{LOG_TAG} dict.local_read_failed err={e}")
         self._update_words_async()
 
     def _set_word_table(self, table):
@@ -320,14 +322,33 @@ class CategoryMixin:
         self._set_category_update_button_state(True)
 
     def _update_words_json(self):
+        total_steps = max(1, len(self._word_games) * len(self._word_langs))
+        current_step = 0
+
+        def _status(message, level=0):
+            try:
+                self.master.after(0, lambda m=message, l=level: self._set_status(m, l))
+            except Exception:
+                pass
+
+        def _progress(value):
+            try:
+                self.master.after(0, lambda p=value: self._set_progress(p))
+            except Exception:
+                pass
+
         try:
-            core.log.info("(gb_warehouse) 开始更新翻译表")
+            core.log.info(f"{LOG_TAG} dict.update_start")
+            _status("正在更新翻译表...", 2)
+            _progress(0)
             new_table = []
             entry_by_chs = {}
             for game, game_name in self._word_games:
                 lang_maps = {}
                 for lang in self._word_langs:
                     payload = self._fetch_word_dict(game, lang)
+                    current_step += 1
+                    _progress(int(current_step * 100 / total_steps))
                     if payload is None:
                         continue
                     id_map = self._invert_name_id_map(payload, game, lang)
@@ -335,12 +356,12 @@ class CategoryMixin:
                         lang_maps[lang] = id_map
 
                 if not lang_maps:
-                    core.log.error(f"(gb_warehouse) 翻译表不可用: {game_name} 三种语言均下载失败")
+                    core.log.warn(f"{LOG_TAG} dict.game_unavailable game={game_name}")
                     continue
 
                 missing = [lang for lang in self._word_langs if lang not in lang_maps]
                 if missing:
-                    core.log.warn(f"(gb_warehouse) 翻译表部分缺失: {game_name} 缺少 {','.join(missing)}")
+                    core.log.warn(f"{LOG_TAG} dict.partial game={game_name} missing={','.join(missing)}")
 
                 all_ids = set()
                 for id_map in lang_maps.values():
@@ -372,23 +393,33 @@ class CategoryMixin:
                             if val not in entry["alts"]:
                                 entry["alts"].append(val)
             if not new_table:
-                core.log.error("(gb_warehouse) 翻译表为空")
+                core.log.error(f"{LOG_TAG} dict.empty_after_merge")
+                _status("翻译表更新失败: 结果为空", 1)
                 return
             try:
                 with open(self._word_file_path(), "w", encoding="utf-8") as f:
                     json.dump(new_table, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                core.log.error(f"(gb_warehouse) 保存翻译表失败: {e}")
+                core.log.error(f"{LOG_TAG} dict.save_failed err={e}")
+                _status("翻译表更新失败: 保存失败", 1)
                 return
 
             self._set_word_table(new_table)
-            core.log.info(f"(gb_warehouse) 翻译表更新完成: {len(new_table)} 条")
+            core.log.info(f"{LOG_TAG} dict.update_done count={len(new_table)}")
+            _status(f"翻译表更新完成: {len(new_table)} 条", 0)
+            _progress(100)
+            try:
+                self.master.after(1200, lambda: self._set_progress(0))
+            except Exception:
+                self._set_progress(0)
             try:
                 self.master.after(0, lambda: self._refresh_category_names())
             except Exception:
                 pass
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 更新翻译表失败: {e}")
+            core.log.error(f"{LOG_TAG} dict.update_failed err={e}")
+            _status("翻译表更新失败", 1)
+            _progress(0)
         finally:
             try:
                 self.master.after(0, self._finish_update_words)

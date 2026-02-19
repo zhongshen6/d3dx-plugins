@@ -19,32 +19,34 @@ import constants as const
 from additional import screen_preview
 from utils import DebouncedCall, format_ts
 
+LOG_TAG = "(gb_warehouse/detail)"
+
 
 class DetailMixin:
     def load_detail(self, mod_id):
         self.current_detail_id = mod_id
         self._detail_request_id += 1
         token = self._detail_request_id
-        core.log.info(f"(gb_warehouse) 开始加载详情: id={mod_id} token={token}")
+        core.log.debug(f"{LOG_TAG} load.start mod_id={mod_id} token={token}")
         self.show_detail_loading()
-        core.window.status.set_status("正在加载 Mod 详情...", 0)
+        self._set_status("正在加载 Mod 详情...", 2)
         taskpool = getattr(core.construct, "taskpool", None)
         if not taskpool:
-            core.log.error("(gb_warehouse) taskpool 不可用，无法加载详情")
+            core.log.error(f"{LOG_TAG} load.taskpool_unavailable")
             self.show_detail_error("任务池不可用")
             return
         try:
             taskpool.newtask(self.async_fetch_detail, (mod_id, token), {}, False)
-            core.log.info(f"(gb_warehouse) 详情任务已提交: id={mod_id} token={token}")
+            core.log.debug(f"{LOG_TAG} load.submitted mod_id={mod_id} token={token}")
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 详情任务提交失败: {e}")
+            core.log.error(f"{LOG_TAG} load.submit_failed mod_id={mod_id} err={e}")
             self.show_detail_error("任务提交失败")
 
     def on_detail_loaded(self, token, data):
         if token != self._detail_request_id:
-            core.log.info(f"(gb_warehouse) 详情响应被丢弃: token={token} current={self._detail_request_id}")
+            core.log.debug(f"{LOG_TAG} load.stale_response token={token} current={self._detail_request_id}")
             return
-        core.log.info(f"(gb_warehouse) 详情数据类型: {type(data).__name__}")
+        core.log.debug(f"{LOG_TAG} load.response_type type={type(data).__name__}")
         self.render_detail(data)
 
     def show_detail_loading(self):
@@ -64,7 +66,8 @@ class DetailMixin:
             self.detail_view_btn.configure(state=DISABLED)
 
     def show_detail_error(self, message):
-        core.log.error(f"(gb_warehouse) 详情渲染错误: {message}")
+        core.log.warn(f"{LOG_TAG} render.error message={message}")
+        self._set_status(message, 1)
         self.detail_text_label.configure(text=message)
         self.detail_text_frame.bin_update()
         self.detail_image_label.configure(text="暂无图片", image="")
@@ -98,9 +101,7 @@ class DetailMixin:
             self.render_downloads(files)
 
             self.detail_image_urls = self.extract_detail_image_urls(data)
-            core.log.info(
-                f"(gb_warehouse) 详情渲染: text_len={len(text)} files={len(files)} images={len(self.detail_image_urls)}"
-            )
+            core.log.debug(f"{LOG_TAG} render.ok text_len={len(text)} files={len(files)} images={len(self.detail_image_urls)}")
             self.detail_image_cache = {}
             self.detail_image_fetching = set()
             self.detail_image_index = 0
@@ -115,8 +116,8 @@ class DetailMixin:
                 state = NORMAL if self.current_detail_url else DISABLED
                 self.detail_view_btn.configure(state=state)
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 详情渲染异常: {e}")
-            core.log.error(traceback.format_exc())
+            core.log.error(f"{LOG_TAG} render.exception err={e}")
+            core.log.debug(f"{LOG_TAG} render.traceback\n{traceback.format_exc()}")
             self.show_detail_error("详情渲染异常")
 
     def extract_detail_image_urls(self, data):
@@ -128,7 +129,7 @@ class DetailMixin:
             file_name = img.get("_sFile530") or img.get("_sFile220") or img.get("_sFile") or img.get("_sFile100")
             if base and file_name:
                 urls.append(f"{base}/{file_name}")
-        core.log.info(f"(gb_warehouse) 解析详情图片: total={len(urls)}")
+        core.log.debug(f"{LOG_TAG} image.parse_urls total={len(urls)}")
         return urls
 
     def update_detail_image_controls(self):
@@ -166,17 +167,17 @@ class DetailMixin:
             return
         self.detail_image_label.configure(text="正在加载图片...", image="")
         token = self._detail_request_id
-        core.log.info(f"(gb_warehouse) 请求详情图片: idx={self.detail_image_index} url={url}")
+        core.log.debug(f"{LOG_TAG} image.request idx={self.detail_image_index} url={url}")
         taskpool = getattr(core.construct, "taskpool", None)
         if not taskpool:
-            core.log.error("(gb_warehouse) taskpool 不可用，无法加载详情图片")
+            core.log.error(f"{LOG_TAG} image.taskpool_unavailable")
             self.detail_image_label.configure(text="图片任务不可用", image="")
             return
         try:
             self.detail_image_fetching.add(url)
             taskpool.newtask(self.async_fetch_detail_image, (url, token), {}, False)
         except Exception as e:
-            core.log.error(f"(gb_warehouse) 详情图片任务提交失败: {e}")
+            core.log.error(f"{LOG_TAG} image.submit_failed err={e}")
             self.detail_image_label.configure(text="图片任务提交失败", image="")
 
     def open_detail_image_fullscreen(self, _event=None):
@@ -202,16 +203,16 @@ class DetailMixin:
                 pil_img = PIL.Image.open(io.BytesIO(res.content))
                 self.master.after(0, lambda: self.on_detail_image_loaded(token, url, pil_img))
             else:
-                core.log.error(f"(gb_warehouse) 详情图片请求失败: status={res.status_code} url={url}")
+                core.log.warn(f"{LOG_TAG} image.http_error status={res.status_code} url={url}")
                 self.master.after(0, lambda: self.on_detail_image_error(token, url))
         except Exception as e:
-            core.log.debug(f"(gb_warehouse) 详情图片下载失败: {e}")
+            core.log.debug(f"{LOG_TAG} image.request_failed url={url} err={e}")
             self.master.after(0, lambda: self.on_detail_image_error(token, url))
 
     def on_detail_image_loaded(self, token, url, pil_img):
         self.detail_image_fetching.discard(url)
         if token != self._detail_request_id:
-            core.log.info(f"(gb_warehouse) 详情图片响应被丢弃: token={token} current={self._detail_request_id}")
+            core.log.debug(f"{LOG_TAG} image.stale_response token={token} current={self._detail_request_id}")
             return
         self.detail_image_cache[url] = pil_img
         if self.detail_image_urls and url == self.detail_image_urls[self.detail_image_index]:
@@ -221,7 +222,7 @@ class DetailMixin:
         self.detail_image_fetching.discard(url)
         if token != self._detail_request_id:
             return
-        core.log.error(f"(gb_warehouse) 详情图片渲染失败: url={url}")
+        core.log.warn(f"{LOG_TAG} image.render_failed url={url}")
         if self.detail_image_urls and url == self.detail_image_urls[self.detail_image_index]:
             self.detail_image_label.configure(text="图片加载失败", image="")
 
@@ -247,9 +248,9 @@ class DetailMixin:
         width = self.detail_image_outer.winfo_width()
         height = self.detail_image_outer.winfo_height()
         if width <= 10 or height <= 10:
-            core.log.info(f"(gb_warehouse) 详情图片尺寸无效: w={width} h={height}")
+            core.log.debug(f"{LOG_TAG} image.invalid_size w={width} h={height}")
             return
-        core.log.info(f"(gb_warehouse) 渲染详情图片: w={width} h={height}")
+        core.log.debug(f"{LOG_TAG} image.render w={width} h={height}")
         resized = PIL.ImageOps.contain(pil_img, (width, height), PIL.Image.LANCZOS)
         tk_img = PIL.ImageTk.PhotoImage(resized)
         self.detail_image_label.configure(image=tk_img, text="")
@@ -284,7 +285,7 @@ class DetailMixin:
         self.download_buttons = []
 
         if not files:
-            core.log.debug("(gb_warehouse) 下载列表为空")
+            core.log.debug(f"{LOG_TAG} download.list_empty")
             self.set_download_empty("无可下载文件")
             return
 
@@ -300,9 +301,7 @@ class DetailMixin:
             count = item.get("_nDownloadCount", 0)
             url = item.get("_sDownloadUrl") or ""
             if not url:
-                core.log.error(f"(gb_warehouse) 下载链接缺失: file={name}")
-            else:
-                core.log.info(f"(gb_warehouse) 下载项: file={name} size={size_text} url_ok=1")
+                core.log.warn(f"{LOG_TAG} download.missing_url file={name}")
 
             state = NORMAL if url else DISABLED
             meta_text = f"🕒 {date_text}\n💾 {size_text}\n📥 {count}"
