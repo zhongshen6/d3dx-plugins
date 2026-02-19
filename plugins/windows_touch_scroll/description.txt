@@ -1,0 +1,25 @@
+Windows 触控滚动插件 (windows_touch_scroll)
+
+该插件用于为管理器提供“拖动即滚动”的输入体验，支持触控与鼠标拖动两种模式切换。
+
+[v1.1.0] 特性：
+- 统一滚动路由：自动匹配可滚动控件（如 Treeview、Text、Canvas、ScrollFrame）。
+- 触控专用模式：可仅响应触控/触笔注入事件，屏蔽鼠标拖动。
+- 双输入模式：可切换为“触控 + 鼠标拖动”同时生效。
+- 动态绑定：自动扫描新创建控件并补充拖动绑定。
+
+
+配置说明：
+可打开插件目录下的config.json文件配置插件功能
+- `onlytouch`：是否仅触控生效。
+- `consume_drag_events`：滚动锁定后是否吞掉拖动事件。
+- `allow_text_drag_selection`：是否保留输入框/文本框拖选行为。
+- `widget_rebind_ms`：动态控件重绑定周期（毫秒）。
+- `drag_threshold_px`：判定进入滚动拖动的位移阈值。
+- `scroll_sensitivity` / `pixels_per_unit`：滚动手感参数。
+
+更新日志：
+[v1.1.0]
+- 重构为稳定的 Tk 输入通道方案。
+- 新增 `onlytouch` 单开关模式控制。
+- 优化日志输出与文案说明。

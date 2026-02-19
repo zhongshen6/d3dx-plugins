@@ -18,8 +18,8 @@ GB_CATEGORY_LIST_URL = "https://gamebanana.com/apiv11/Mod/Index"
 GB_SUBCATEGORY_URL_TMPL = "https://gamebanana.com/apiv11/ModCategory/{root_id}/SubCategories"
 GB_LIST_PERPAGE = 15
 
-LIST_THUMB_W = 350
-LIST_THUMB_H = 200
+LIST_THUMB_W = 400
+LIST_THUMB_H = 250
 
 RESIZE_DEBOUNCE_MS = 500
 UI_RESIZE_PAUSED = False

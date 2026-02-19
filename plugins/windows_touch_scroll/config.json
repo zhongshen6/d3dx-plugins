@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "onlytouch": false,
+  "consume_drag_events": true,
+  "allow_text_drag_selection": false,
+  "widget_rebind_ms": 1200,
+  "profile": "balanced",
+  "scroll_sensitivity": 1.0,
+  "drag_threshold_px": 8,
+  "pixels_per_unit": 36,
+  "log_debug": false
+}
