@@ -1,22 +1,25 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (Update Check)
-
 import time
 import threading
-
 import ttkbootstrap
 from ttkbootstrap.constants import OUTLINE, NORMAL, DISABLED
-
 import core
 import constants as const
 from constant import K
-from utils import merge_gb_explain, parse_gb_explain
-
+from utils import merge_gb_explain, parse_gb_explain, safe_call, safe_after
 CMD_UNLOAD = "--X--"
 LOG_TAG = "(gb_warehouse/update)"
 
-
 class UpdateMixin:
+    def _set_widget_state(self, widget, enabled):
+        if widget:
+            safe_call(widget.configure, state=NORMAL if enabled else DISABLED)
+
+    def _apply_tree_highlight(self, tree, items, highlight_set, skip_item=None):
+        for item in items:
+            if skip_item is not None and item == skip_item:
+                continue
+            safe_call(tree.tag_configure, item, foreground="green" if item in highlight_set else "")
+
     def install_update_hooks(self):
         self._ensure_status_check_label()
         self._ensure_mods_manage_button()
@@ -32,10 +35,7 @@ class UpdateMixin:
         if not status:
             return
         if hasattr(status, "label_gb_check"):
-            try:
-                status.label_gb_check.bind("<Button-1>", lambda *_: self.check_gb_updates())
-            except Exception:
-                pass
+            safe_call(status.label_gb_check.bind, "<Button-1>", lambda *_: self.check_gb_updates())
             return
         label = ttkbootstrap.Label(status.master, text="[ 检查更新 ]", cursor="hand2")
         label.pack(side="right", padx=(10, 0), pady=5)
@@ -47,10 +47,7 @@ class UpdateMixin:
         if not mods_manage:
             return
         if hasattr(mods_manage, "btn_gb_detail"):
-            try:
-                mods_manage.btn_gb_detail.configure(command=self.open_gb_detail_from_manage)
-            except Exception:
-                pass
+            safe_call(mods_manage.btn_gb_detail.configure, command=self.open_gb_detail_from_manage)
             self._refresh_mods_manage_gb_button()
             return
         btn = ttkbootstrap.Button(
@@ -60,15 +57,9 @@ class UpdateMixin:
             command=self.open_gb_detail_from_manage,
             state=DISABLED
         )
-        try:
-            mods_manage.label_SHA.pack_forget()
-        except Exception:
-            pass
+        safe_call(mods_manage.label_SHA.pack_forget)
         btn.pack(side="bottom", fill="x", padx=0, pady=(0, 6))
-        try:
-            mods_manage.label_SHA.pack(side="bottom", fill="x", padx=0, pady=0)
-        except Exception:
-            pass
+        safe_call(mods_manage.label_SHA.pack, side="bottom", fill="x", padx=0, pady=0)
         mods_manage.btn_gb_detail = btn
         self._refresh_mods_manage_gb_button()
 
@@ -102,34 +93,12 @@ class UpdateMixin:
     def _apply_object_highlight(self, mods_manage):
         gb_updates = getattr(core, "gb_updates", None)
         updated_objects = gb_updates.get("objects", set()) if isinstance(gb_updates, dict) else set()
-        for object_name in mods_manage.treeview_objects.get_children():
-            if object_name in updated_objects:
-                try:
-                    mods_manage.treeview_objects.tag_configure(object_name, foreground="green")
-                except Exception:
-                    pass
-            else:
-                try:
-                    mods_manage.treeview_objects.tag_configure(object_name, foreground="")
-                except Exception:
-                    pass
+        self._apply_tree_highlight(mods_manage.treeview_objects, mods_manage.treeview_objects.get_children(), updated_objects)
 
     def _apply_choice_highlight(self, mods_manage):
         gb_updates = getattr(core, "gb_updates", None)
         updated_shas = gb_updates.get("shas", set()) if isinstance(gb_updates, dict) else set()
-        for sha in mods_manage.treeview_choices.get_children():
-            if sha == CMD_UNLOAD:
-                continue
-            if sha in updated_shas:
-                try:
-                    mods_manage.treeview_choices.tag_configure(sha, foreground="green")
-                except Exception:
-                    pass
-            else:
-                try:
-                    mods_manage.treeview_choices.tag_configure(sha, foreground="")
-                except Exception:
-                    pass
+        self._apply_tree_highlight(mods_manage.treeview_choices, mods_manage.treeview_choices.get_children(), updated_shas, CMD_UNLOAD)
 
     def _refresh_mods_manage_gb_button(self):
         mods_manage = getattr(core.window.interface, "mods_manage", None)
@@ -138,25 +107,16 @@ class UpdateMixin:
         btn = mods_manage.btn_gb_detail
         sha = mods_manage.sbin_get_select_choices()
         if not sha or sha == CMD_UNLOAD:
-            try:
-                btn.configure(state=DISABLED)
-            except Exception:
-                pass
+            self._set_widget_state(btn, False)
             return
         item = core.module.mods_index.get_item(sha)
         if not item:
-            try:
-                btn.configure(state=DISABLED)
-            except Exception:
-                pass
+            self._set_widget_state(btn, False)
             return
         explain = item.get(K.INDEX.EXPLAIN) or ""
         mod_id, _last = parse_gb_explain(explain)
         core.log.debug(f"{LOG_TAG} detail_button.check sha={sha} mod_id={mod_id} last={_last}")
-        try:
-            btn.configure(state=NORMAL if mod_id else DISABLED)
-        except Exception:
-            pass
+        self._set_widget_state(btn, bool(mod_id))
 
     def check_gb_updates(self):
         if getattr(self, "_gb_update_running", False):
@@ -183,14 +143,14 @@ class UpdateMixin:
                     if obj_name:
                         updated_objects.add(obj_name)
                 pct = int(idx * 100 / total) if total else 100
-                self.master.after(0, lambda p=pct: self._set_progress(p))
+                safe_after(self.master, 0, self._set_progress, pct)
                 if idx % 3 == 0:
                     msg = f"更新检查中 {idx}/{total}" if total else "更新检查中"
-                    self.master.after(0, lambda m=msg: self._set_status(m, 2))
+                    safe_after(self.master, 0, self._set_status, msg, 2)
             if total == 0:
-                self.master.after(0, lambda: self._set_progress(100))
+                safe_after(self.master, 0, self._set_progress, 100)
         finally:
-            self.master.after(0, lambda: self._apply_update_results(updated_shas, updated_objects))
+            safe_after(self.master, 0, self._apply_update_results, updated_shas, updated_objects)
 
     def _collect_gb_targets(self):
         targets = []
@@ -236,19 +196,14 @@ class UpdateMixin:
             msg = f"更新检查完成：{count} 个有更新" if count else "更新检查完成：未发现更新"
             self._set_progress(100)
             self._set_status(msg, level)
-            try:
-                self.master.after(1200, lambda: self._set_progress(0))
-            except Exception:
+            if safe_after(self.master, 1200, self._set_progress, 0) is None:
                 self._set_progress(0)
             core.log.info(f"{LOG_TAG} check.done updated={count}")
 
             mods_manage = getattr(core.window.interface, "mods_manage", None)
             if mods_manage:
-                try:
-                    mods_manage.update_objects_list()
-                    mods_manage.update_choices_list()
-                except Exception:
-                    pass
+                safe_call(mods_manage.update_objects_list)
+                safe_call(mods_manage.update_choices_list)
         finally:
             self._gb_update_running = False
 
@@ -277,10 +232,7 @@ class UpdateMixin:
             return
         notebook = getattr(core.window.interface, "notebook", None)
         if notebook and hasattr(warehouse, "master"):
-            try:
-                notebook.select(warehouse.master)
-            except Exception:
-                pass
+            safe_call(notebook.select, warehouse.master)
         gb_ctrl = getattr(warehouse, "gb_ctrl", None)
         if gb_ctrl:
             gb_ctrl.load_detail(mod_id)
@@ -307,8 +259,5 @@ class UpdateMixin:
     def _refresh_lists_after_clear(self):
         mods_manage = getattr(core.window.interface, "mods_manage", None)
         if mods_manage:
-            try:
-                mods_manage.update_objects_list()
-                mods_manage.update_choices_list()
-            except Exception:
-                pass
+            safe_call(mods_manage.update_objects_list)
+            safe_call(mods_manage.update_choices_list)

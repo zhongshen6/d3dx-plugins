@@ -1,6 +1,3 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (High-Def Responsive List Edition)
-
 import os
 import sys
 
@@ -20,7 +17,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 import constants as const
-from utils import DebouncedCall
+from utils import DebouncedCall, safe_call, destroy_many, clear_children
 from api import ApiMixin
 from downloader import DownloadMixin
 from update_check import UpdateMixin
@@ -28,13 +25,10 @@ from ui_list import ListMixin
 from settings import SettingsMixin
 from categories import CategoryMixin
 from ui_detail import DetailMixin
-
 __version__ = "v1.4.1"
 LOG_TAG = "(gb_warehouse/main)"
-
 # 抑制 InsecureRequestWarning 警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 
 class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, SettingsMixin, CategoryMixin):
     """列表 UI 控制器"""
@@ -99,10 +93,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         if not status:
             return
         text = f"[GB仓库] {message}"
-        try:
-            status.set_status(text, int(level))
-        except Exception:
-            pass
+        safe_call(status.set_status, text, int(level))
 
     def _set_progress(self, value):
         status = getattr(core.window, "status", None)
@@ -116,22 +107,14 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
             ivalue = 0
         if ivalue > 100:
             ivalue = 100
-        try:
-            status.set_progress(ivalue)
-        except Exception:
-            pass
+        safe_call(status.set_progress, ivalue)
 
     def setup_ui(self):
-        for widget in self.master.winfo_children():
-            try:
-                widget.destroy()
-            except Exception:
-                pass
+        destroy_many(self.master.winfo_children())
 
         self.Frame_main = ttkbootstrap.Frame(self.master)
         self.Frame_main.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # Panels: list (left), details (middle), downloads (right)
         self.Frame_list = ttkbootstrap.Frame(self.Frame_main, bootstyle=SECONDARY, width=const.LIST_BASE_W)
         self.Frame_detail = ttkbootstrap.Frame(self.Frame_main, bootstyle=SECONDARY, width=const.DETAIL_BASE_W)
         self.Frame_download = ttkbootstrap.Frame(self.Frame_main, bootstyle=SECONDARY, width=const.DOWNLOAD_W)
@@ -228,7 +211,6 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.scroll_frame.w_canvas.bind("<Configure>", self.on_canvas_resize, add="+")
         self.Frame_main.bind("<Configure>", self.on_layout_resize, True)
 
-        # Detail area (image + text)
         self.detail_inner = ttkbootstrap.Frame(self.Frame_detail, padding=12)
         self.detail_inner.pack(fill=BOTH, expand=True)
 
@@ -301,7 +283,6 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         )
         self.detail_view_btn.place(x=0, y=0)
 
-        # Download area
         self.download_inner = ttkbootstrap.Frame(self.Frame_download, padding=12)
         self.download_inner.pack(fill=BOTH, expand=True)
 
@@ -331,56 +312,44 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
     def show_retry_notice(self, message="连接 GB 失败", page=None):
         if page:
             self._last_failed_page = page
-        try:
-            self.list_notice_label.configure(text=message)
-        except Exception:
-            pass
+        safe_call(self.list_notice_label.configure, text=message)
         if not self.list_notice.winfo_manager():
-            try:
-                self.list_notice.pack(side=TOP, fill=X, before=self.scroll_frame)
-            except Exception:
+            if safe_call(self.list_notice.pack, side=TOP, fill=X, before=self.scroll_frame) is None:
                 self.list_notice.pack(side=TOP, fill=X)
 
     def hide_retry_notice(self):
         if self.list_notice.winfo_manager():
-            try:
-                self.list_notice.pack_forget()
-            except Exception:
-                pass
+            safe_call(self.list_notice.pack_forget)
 
     def retry_load(self):
         page = self._last_failed_page or self.current_page or 1
         self.hide_retry_notice()
         self.load_page(page)
 
-    def on_canvas_resize(self, event):
-        self._pending_canvas_w = event.width
+    def _queue_resize(self, **pending):
+        for key, value in pending.items():
+            setattr(self, key, value)
         self.schedule_resize_apply()
+
+    def on_canvas_resize(self, event):
+        self._queue_resize(_pending_canvas_w=event.width)
 
     def on_layout_resize(self, event):
-        self._pending_layout_w = event.width
-        self.schedule_resize_apply()
+        self._queue_resize(_pending_layout_w=event.width)
 
     def on_detail_resize(self, event):
-        self._pending_detail_w = event.width
-        self._pending_detail_h = event.height
-        self.schedule_resize_apply()
+        self._queue_resize(_pending_detail_w=event.width, _pending_detail_h=event.height)
 
     def on_download_resize(self, event):
-        self._pending_download_w = event.width
-        self.schedule_resize_apply()
+        self._queue_resize(_pending_download_w=event.width)
 
     def on_detail_text_resize(self, event):
-        self._pending_detail_text_w = event.width
-        self.schedule_resize_apply()
+        self._queue_resize(_pending_detail_text_w=event.width)
 
     def schedule_resize_apply(self):
         const.UI_RESIZE_PAUSED = True
         if self._resize_job is not None:
-            try:
-                self.master.after_cancel(self._resize_job)
-            except Exception:
-                pass
+            safe_call(self.master.after_cancel, self._resize_job)
         self._resize_job = self.master.after(const.RESIZE_DEBOUNCE_MS, self.apply_resize_updates)
 
     def apply_resize_updates(self):
@@ -462,17 +431,10 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         img_block_h = max(160, int(height * 0.4))
         self.detail_image_block.configure(height=img_block_h)
 
-        ctrl_h = 0
-        try:
-            self.detail_image_ctrl.update_idletasks()
-            ctrl_h = self.detail_image_ctrl.winfo_height()
-        except Exception:
-            pass
+        safe_call(self.detail_image_ctrl.update_idletasks)
+        ctrl_h = safe_call(self.detail_image_ctrl.winfo_height, default=0) or 0
         img_area_h = max(80, img_block_h - ctrl_h - 6)
-        try:
-            self.detail_image_outer.configure(height=img_area_h)
-        except Exception:
-            pass
+        safe_call(self.detail_image_outer.configure, height=img_area_h)
 
         self.update_detail_text_wraplength()
         self.refresh_detail_image()
@@ -516,10 +478,8 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         if not notebook:
             self.is_visible = True
         else:
-            try:
-                self.is_visible = (notebook.select() == str(self.instance.master))
-            except Exception:
-                self.is_visible = True
+            current = safe_call(notebook.select, default=str(self.instance.master))
+            self.is_visible = (current == str(self.instance.master))
         if self.is_visible:
             self.ensure_game_id(prompt_if_missing=True)
             self.prefetch_next_page()
@@ -532,10 +492,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.set_list_mode("search", query=text)
 
     def go_home_list(self):
-        try:
-            self.search_entry.delete(0, "end")
-        except Exception:
-            pass
+        safe_call(self.search_entry.delete, 0, "end")
         self.set_list_mode("list")
 
     def apply_game_id_change(self, game_id, reload=True):
@@ -552,73 +509,41 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.items = []
         self.current_page = 1
         self.page_count = None
-        try:
-            self.update_page_label()
-        except Exception:
-            pass
+        safe_call(self.update_page_label)
         if reload and self.is_visible:
             self.load_page(1)
 
     def _clear_list_ui(self):
-        for item in self.items:
-            try:
-                item.destroy()
-            except Exception:
-                pass
+        destroy_many(self.items)
         self.items = []
         if hasattr(self, "scroll_frame"):
-            try:
-                for child in self.scroll_frame.winfo_children():
-                    try:
-                        child.destroy()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            try:
-                self.scroll_frame.bin_update()
-                self.scroll_frame.w_canvas.yview_moveto(0)
-            except Exception:
-                pass
+            clear_children(self.scroll_frame)
+            safe_call(self.scroll_frame.bin_update)
+            safe_call(self.scroll_frame.w_canvas.yview_moveto, 0)
 
     def _init_id_entry(self):
         placeholder = "输入id"
         self._id_entry_placeholder = placeholder
-        try:
-            self._id_entry_default_fg = self.id_entry.cget("foreground")
-        except Exception:
-            self._id_entry_default_fg = None
+        self._id_entry_default_fg = safe_call(self.id_entry.cget, "foreground")
         self.id_entry.insert(0, placeholder)
-        try:
-            self.id_entry.configure(foreground="#888888")
-        except Exception:
-            pass
+        safe_call(self.id_entry.configure, foreground="#888888")
 
         tip = "输入模组id后回车以打开mod详情页"
-        try:
-            core.window.annotation_toplevel.register(self.id_entry, tip, 1)
-        except Exception:
-            pass
+        safe_call(core.window.annotation_toplevel.register, self.id_entry, tip, 1)
 
         def _focus_in(_event=None):
             current = self.id_entry.get()
             if current == placeholder:
                 self.id_entry.delete(0, "end")
                 if self._id_entry_default_fg:
-                    try:
-                        self.id_entry.configure(foreground=self._id_entry_default_fg)
-                    except Exception:
-                        pass
+                    safe_call(self.id_entry.configure, foreground=self._id_entry_default_fg)
 
         def _focus_out(_event=None):
             current = self.id_entry.get().strip()
             if not current:
                 self.id_entry.delete(0, "end")
                 self.id_entry.insert(0, placeholder)
-                try:
-                    self.id_entry.configure(foreground="#888888")
-                except Exception:
-                    pass
+                safe_call(self.id_entry.configure, foreground="#888888")
 
         def _on_submit(_event=None):
             value = self.id_entry.get().strip()

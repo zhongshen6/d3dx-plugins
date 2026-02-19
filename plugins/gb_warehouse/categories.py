@@ -1,30 +1,32 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (Categories)
-
 import json
 import os
 import re
 import threading
 import ttkbootstrap
 from ttkbootstrap.constants import *
-
 import core
 import constants as const
-
+from utils import safe_call, safe_after
 LOG_TAG = "(gb_warehouse/category)"
-
-
 class CategoryMixin:
     _word_table = None
     _word_index = None
     _word_lock = threading.Lock()
     _word_update_running = False
-
     _word_games = (
         ("genshin", "原神"),
         ("starrail", "星穹铁道"),
     )
     _word_langs = ("chs", "en", "jp")
+    def _close_category_window(self):
+        win = getattr(self, "_category_window", None)
+        if win and win.winfo_exists():
+            safe_call(win.destroy)
+
+    def _apply_category(self, cid, name):
+        if hasattr(self, "set_list_mode"):
+            self.set_list_mode("category", category_id=cid, category_name=name)
+        self._close_category_window()
 
     def open_category_browser(self):
         root_id = self.get_root_category_id() if hasattr(self, "get_root_category_id") else None
@@ -36,11 +38,8 @@ class CategoryMixin:
         core.log.debug(f"{LOG_TAG} browser.open root_id={root_id}")
 
         if getattr(self, "_category_window", None) and self._category_window.winfo_exists():
-            try:
-                self._category_window.lift()
-                self._category_window.focus()
-            except Exception:
-                pass
+            safe_call(self._category_window.lift)
+            safe_call(self._category_window.focus)
             return
 
         win = ttkbootstrap.Toplevel("GB 子分类")
@@ -89,21 +88,15 @@ class CategoryMixin:
         btn_open.pack(side=RIGHT, padx=(0, 8))
         btn_update.pack(side=LEFT)
         if self._word_update_running:
-            try:
-                btn_update.configure(state=DISABLED)
-            except Exception:
-                pass
+            safe_call(btn_update.configure, state=DISABLED)
 
         tree.bind("<Double-1>", lambda *_: self._open_selected_category(), add="+")
 
         self._load_subcategories(root_id)
         self._ensure_words_loaded_async()
 
-        try:
-            win.update_idletasks()
-            core.window.methods.center_window_for_window(win, core.window.mainwindow)
-        except Exception:
-            pass
+        safe_call(win.update_idletasks)
+        safe_call(core.window.methods.center_window_for_window, win, core.window.mainwindow)
 
     def _load_subcategories(self, root_id):
         taskpool = getattr(core.construct, "taskpool", None)
@@ -189,26 +182,14 @@ class CategoryMixin:
             cid = int(values[1])
         except Exception:
             return
-        if hasattr(self, "set_list_mode"):
-            self.set_list_mode("category", category_id=cid, category_name=name)
-        if getattr(self, "_category_window", None) and self._category_window.winfo_exists():
-            try:
-                self._category_window.destroy()
-            except Exception:
-                pass
+        self._apply_category(cid, name)
 
     def _open_manual_category(self, value):
         text = (value or "").strip()
         if not text.isdigit():
             return
         cid = int(text)
-        if hasattr(self, "set_list_mode"):
-            self.set_list_mode("category", category_id=cid, category_name=f"#{cid}")
-        if getattr(self, "_category_window", None) and self._category_window.winfo_exists():
-            try:
-                self._category_window.destroy()
-            except Exception:
-                pass
+        self._apply_category(cid, f"#{cid}")
 
     def _word_file_path(self):
         return os.path.join(os.path.dirname(__file__), "word.json")
@@ -303,7 +284,6 @@ class CategoryMixin:
                     key = self._normalize_key(alt)
                     if not key:
                         continue
-                    # longest match wins
                     prev = index.get(key)
                     if not prev or len(alt) > prev[1]:
                         index[key] = (chs, len(alt))
@@ -326,16 +306,10 @@ class CategoryMixin:
         current_step = 0
 
         def _status(message, level=0):
-            try:
-                self.master.after(0, lambda m=message, l=level: self._set_status(m, l))
-            except Exception:
-                pass
+            safe_after(self.master, 0, self._set_status, message, level)
 
         def _progress(value):
-            try:
-                self.master.after(0, lambda p=value: self._set_progress(p))
-            except Exception:
-                pass
+            safe_after(self.master, 0, self._set_progress, value)
 
         try:
             core.log.info(f"{LOG_TAG} dict.update_start")
@@ -408,22 +382,15 @@ class CategoryMixin:
             core.log.info(f"{LOG_TAG} dict.update_done count={len(new_table)}")
             _status(f"翻译表更新完成: {len(new_table)} 条", 0)
             _progress(100)
-            try:
-                self.master.after(1200, lambda: self._set_progress(0))
-            except Exception:
+            if safe_after(self.master, 1200, self._set_progress, 0) is None:
                 self._set_progress(0)
-            try:
-                self.master.after(0, lambda: self._refresh_category_names())
-            except Exception:
-                pass
+            safe_after(self.master, 0, self._refresh_category_names)
         except Exception as e:
             core.log.error(f"{LOG_TAG} dict.update_failed err={e}")
             _status("翻译表更新失败", 1)
             _progress(0)
         finally:
-            try:
-                self.master.after(0, self._finish_update_words)
-            except Exception:
+            if safe_after(self.master, 0, self._finish_update_words) is None:
                 self._finish_update_words()
 
     def _translate_name(self, name):
@@ -441,7 +408,4 @@ class CategoryMixin:
             if not raw or raw == "未获取到分类":
                 continue
             translated = self._translate_name(raw)
-            try:
-                tree.set(item_id, "name", translated)
-            except Exception:
-                pass
+            safe_call(tree.set, item_id, "name", translated)

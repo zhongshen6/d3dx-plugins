@@ -1,10 +1,29 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (Utils)
-
 import datetime
 import re
 import weakref
 
+def safe_call(fn, *args, default=None, **kwargs):
+    if not fn:
+        return default
+    try:
+        return fn(*args, **kwargs)
+    except Exception:
+        return default
+
+def safe_after(widget, delay_ms, fn, *args, **kwargs):
+    if not widget:
+        return None
+    try:
+        return widget.after(delay_ms, lambda: safe_call(fn, *args, **kwargs))
+    except Exception:
+        return None
+
+def destroy_many(items):
+    for item in list(items or []):
+        safe_call(getattr(item, "destroy", None))
+
+def clear_children(widget):
+    destroy_many(safe_call(getattr(widget, "winfo_children", None), default=[]))
 
 def format_ts(ts, fmt="%y.%m.%d", empty="--.--.--"):
     if not ts:
@@ -15,14 +34,12 @@ def format_ts(ts, fmt="%y.%m.%d", empty="--.--.--"):
     except Exception:
         return empty
 
-
 def normalize_explain(explain):
     if not explain:
         return ""
     if "\\n" in explain and "\n" not in explain:
         return explain.replace("\\n", "\n")
     return explain
-
 
 def parse_gb_explain(explain):
     explain = normalize_explain(explain)
@@ -33,7 +50,6 @@ def parse_gb_explain(explain):
         return int(match.group(1)), int(match.group(2))
     except Exception:
         return None, None
-
 
 def merge_gb_explain(explain, mod_id, ts):
     line = f"[GB] id={mod_id} last={ts}"
@@ -55,7 +71,6 @@ def merge_gb_explain(explain, mod_id, ts):
         lines.append(line)
     return sep.join(lines)
 
-
 class DebouncedCall:
     _instances = weakref.WeakSet()
 
@@ -75,25 +90,16 @@ class DebouncedCall:
         self._has_pending = True
         if self.is_paused_fn():
             if self._job is not None:
-                try:
-                    self.widget.after_cancel(self._job)
-                except Exception:
-                    pass
+                safe_call(self.widget.after_cancel, self._job)
                 self._job = None
             return
         if self._job is not None:
-            try:
-                self.widget.after_cancel(self._job)
-            except Exception:
-                pass
+            safe_call(self.widget.after_cancel, self._job)
         self._job = self.widget.after(self.delay_ms, self._run)
 
     def cancel(self):
         if self._job is not None:
-            try:
-                self.widget.after_cancel(self._job)
-            except Exception:
-                pass
+            safe_call(self.widget.after_cancel, self._job)
             self._job = None
         self._pending = None
         self._callback = None
@@ -105,10 +111,7 @@ class DebouncedCall:
         if not self._has_pending:
             return False
         if self._job is not None:
-            try:
-                self.widget.after_cancel(self._job)
-            except Exception:
-                pass
+            safe_call(self.widget.after_cancel, self._job)
             self._job = None
         value = self._pending
         callback = self._callback
@@ -122,10 +125,7 @@ class DebouncedCall:
     @classmethod
     def flush_all(cls):
         for inst in list(cls._instances):
-            try:
-                inst.flush()
-            except Exception:
-                pass
+            safe_call(inst.flush)
 
     def _run(self):
         self._job = None

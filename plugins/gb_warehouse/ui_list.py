@@ -1,20 +1,13 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (List UI)
-
 import io
 import tkinter.font as tkfont
-
 import PIL.Image
 import PIL.ImageTk
 import ttkbootstrap
 from ttkbootstrap.constants import *
-
 import core
 import constants as const
-from utils import DebouncedCall, format_ts
-
+from utils import DebouncedCall, format_ts, safe_call, destroy_many
 LOG_TAG = "(gb_warehouse/list)"
-
 
 class GBListItem(ttkbootstrap.Frame):
     """单个 Mod 列表项组件 - 支持响应式宽度和换行"""
@@ -83,7 +76,6 @@ class GBListItem(ttkbootstrap.Frame):
                 padding=(6, 1),
                 anchor=CENTER
             )
-            # Use absolute positioning so the badge does not consume layout space.
             self.nsfw_label.place(x=0, y=0)
 
         detail_text = f"👤{author}\n👁️{views}\n🕒{updated}"
@@ -121,13 +113,10 @@ class GBListItem(ttkbootstrap.Frame):
     def update_nsfw_badge_position(self):
         if not self.nsfw_label or self.is_destroyed:
             return
-        try:
-            self.info_frame.update_idletasks()
-            self.name_label.update_idletasks()
-            top = self.name_label.winfo_y() + self.name_label.winfo_height() + 2
-            self.nsfw_label.place(relx=1.0, x=-2, y=top, anchor=NE)
-        except Exception:
-            pass
+        safe_call(self.info_frame.update_idletasks)
+        safe_call(self.name_label.update_idletasks)
+        top = (safe_call(self.name_label.winfo_y, default=0) or 0) + (safe_call(self.name_label.winfo_height, default=0) or 0) + 2
+        safe_call(self.nsfw_label.place, relx=1.0, x=-2, y=top, anchor=NE)
 
     def update_name_ellipsis(self, wraplength):
         text = self.name_text or ""
@@ -161,11 +150,8 @@ class GBListItem(ttkbootstrap.Frame):
     def update_image(self, tk_img):
         if self.is_destroyed:
             return
-        try:
-            self.cover_label.configure(image=tk_img, text="")
-            self.image_ref = tk_img
-        except Exception:
-            pass
+        safe_call(self.cover_label.configure, image=tk_img, text="")
+        self.image_ref = tk_img
 
     def on_image_click(self, _event=None):
         if self._on_image_click:
@@ -176,8 +162,15 @@ class GBListItem(ttkbootstrap.Frame):
         self._wrap_debounce.cancel()
         super().destroy()
 
-
 class ListMixin:
+    def _get_list_fetch_args(self, page, prefetch):
+        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
+        mode = getattr(self, "list_mode", "list")
+        return (page, prefetch, game_id, mode, self.list_query, self.category_id)
+
+    def _submit_list_fetch(self, page, prefetch):
+        core.construct.taskpool.newtask(self.async_fetch_json, self._get_list_fetch_args(page, prefetch), {}, False)
+
     def _get_list_token(self):
         mode = getattr(self, "list_mode", "list") or "list"
         if mode == "search":
@@ -257,14 +250,7 @@ class ListMixin:
         if cache_key in self.page_cache or cache_key in self.prefetching_pages:
             return
         self.prefetching_pages.add(cache_key)
-        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
-        mode = getattr(self, "list_mode", "list")
-        core.construct.taskpool.newtask(
-            self.async_fetch_json,
-            (page, True, game_id, mode, self.list_query, self.category_id),
-            {},
-            False,
-        )
+        self._submit_list_fetch(page, True)
 
     def trigger_load(self):
         self.load_page(1)
@@ -273,10 +259,7 @@ class ListMixin:
         if page < 1:
             return
         if hasattr(self, "hide_retry_notice"):
-            try:
-                self.hide_retry_notice()
-            except Exception:
-                pass
+            safe_call(self.hide_retry_notice)
         self.current_page = page
         cache_key = self._get_cache_key(page)
         if cache_key in self.page_cache:
@@ -287,14 +270,7 @@ class ListMixin:
             return
         self._set_status(f"正在加载第 {page} 页...", 2)
         core.log.debug(f"{LOG_TAG} page.fetch page={page} mode={self.list_mode}")
-        game_id = self.get_game_id() if hasattr(self, "get_game_id") else const.DEFAULT_GAME_ID
-        mode = getattr(self, "list_mode", "list")
-        core.construct.taskpool.newtask(
-            self.async_fetch_json,
-            (page, False, game_id, mode, self.list_query, self.category_id),
-            {},
-            False,
-        )
+        self._submit_list_fetch(page, False)
 
     def on_page_loaded(self, page, records, page_count=None, prefetch=False, game_id=None, mode="list", query=None, category_id=None):
         if game_id and hasattr(self, "get_game_id") and game_id != self.get_game_id():
@@ -320,11 +296,7 @@ class ListMixin:
             self.current_page = page
             self.update_page_label()
         core.log.debug(f"{LOG_TAG} render.start page={self.current_page} count={len(records)}")
-        for item in self.items:
-            try:
-                item.destroy()
-            except Exception:
-                pass
+        destroy_many(self.items)
         self.items = []
 
         for rec in records:

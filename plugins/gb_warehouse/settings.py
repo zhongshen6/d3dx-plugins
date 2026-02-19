@@ -1,16 +1,23 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (Settings)
-
 import ttkbootstrap
 from ttkbootstrap.constants import *
-
 import core
 import constants as const
-
+from utils import safe_call, safe_after
 LOG_TAG = "(gb_warehouse/settings)"
-
-
 class SettingsMixin:
+    def _get_conf_int(self, key):
+        conf = getattr(core.userenv, "configuration", None)
+        if not conf:
+            return None
+        return self._normalize_game_id(getattr(conf, key, None))
+
+    def _set_conf_int(self, key, value, log_name):
+        conf = getattr(core.userenv, "configuration", None)
+        if not conf:
+            return
+        setattr(conf, key, int(value))
+        core.log.debug(f"{LOG_TAG} {log_name}.saved env={self._get_env_name()} id={value}")
+
     def _get_env_name(self):
         return getattr(core.userenv, "user_name", None)
 
@@ -31,32 +38,16 @@ class SettingsMixin:
             return None
 
     def _get_saved_game_id(self):
-        conf = getattr(core.userenv, "configuration", None)
-        if not conf:
-            return None
-        value = getattr(conf, "gb_game_id", None)
-        return self._normalize_game_id(value)
+        return self._get_conf_int("gb_game_id")
 
     def _set_saved_game_id(self, game_id):
-        conf = getattr(core.userenv, "configuration", None)
-        if not conf:
-            return
-        conf.gb_game_id = int(game_id)
-        core.log.debug(f"{LOG_TAG} game_id.saved env={self._get_env_name()} id={game_id}")
+        self._set_conf_int("gb_game_id", game_id, "game_id")
 
     def _get_saved_root_category_id(self):
-        conf = getattr(core.userenv, "configuration", None)
-        if not conf:
-            return None
-        value = getattr(conf, "gb_root_category_id", None)
-        return self._normalize_game_id(value)
+        return self._get_conf_int("gb_root_category_id")
 
     def _set_saved_root_category_id(self, category_id):
-        conf = getattr(core.userenv, "configuration", None)
-        if not conf:
-            return
-        conf.gb_root_category_id = int(category_id)
-        core.log.debug(f"{LOG_TAG} root_category.saved env={self._get_env_name()} id={category_id}")
+        self._set_conf_int("gb_root_category_id", category_id, "root_category")
 
     def get_root_category_id(self):
         saved = self._get_saved_root_category_id()
@@ -109,11 +100,8 @@ class SettingsMixin:
 
     def open_game_id_settings(self, force_prompt=False):
         if self._game_id_window and self._game_id_window.winfo_exists():
-            try:
-                self._game_id_window.lift()
-                self._game_id_window.focus()
-            except Exception:
-                pass
+            safe_call(self._game_id_window.lift)
+            safe_call(self._game_id_window.focus)
             return
 
         env_name = self._get_env_name() or "<未登录>"
@@ -180,26 +168,17 @@ class SettingsMixin:
             if root_id is not None:
                 self._set_saved_root_category_id(root_id)
             self.apply_game_id_change(game_id)
-            try:
-                win.destroy()
-            except Exception:
-                pass
+            safe_call(win.destroy)
             pending = getattr(self, "_pending_open_category", False)
             self._pending_open_category = False
             if pending and self.get_root_category_id():
-                try:
-                    self.master.after(0, self.open_category_browser)
-                except Exception:
-                    pass
+                safe_after(self.master, 0, self.open_category_browser)
 
         def _cancel():
             if force_prompt and not self._get_saved_game_id():
                 self._set_saved_game_id(const.DEFAULT_GAME_ID)
                 self.apply_game_id_change(const.DEFAULT_GAME_ID)
-            try:
-                win.destroy()
-            except Exception:
-                pass
+            safe_call(win.destroy)
 
         btn_save = ttkbootstrap.Button(
             btn_row,
@@ -211,12 +190,6 @@ class SettingsMixin:
         btn_cancel.pack(side=RIGHT)
         btn_save.pack(side=RIGHT, padx=(0, 8))
 
-        def _on_close():
-            _cancel()
-
-        win.protocol("WM_DELETE_WINDOW", _on_close)
-        try:
-            win.update_idletasks()
-            core.window.methods.center_window_for_window(win, core.window.mainwindow)
-        except Exception:
-            pass
+        win.protocol("WM_DELETE_WINDOW", _cancel)
+        safe_call(win.update_idletasks)
+        safe_call(core.window.methods.center_window_for_window, win, core.window.mainwindow)

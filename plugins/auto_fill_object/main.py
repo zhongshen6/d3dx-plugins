@@ -2,12 +2,11 @@
 # d3dxSkinManage Plugin: auto_fill_object
 # Author: Gemini / numlinka expert
 
-__version__ = "v1.3.0"
+__version__ = "v1.4.0"
 
 import os
 import json
 import threading
-import re
 import requests
 import ttkbootstrap
 from ttkbootstrap.constants import *
@@ -15,60 +14,24 @@ from ttkbootstrap.constants import *
 import core
 from additional.add_mod2.add_mod_unit import AddModUnit
 
-# 定义 5 个确定的数据源及其解析配置
-DATA_SOURCES = [
-    {
-        "game": "GI",
-        "name": "原神角色",
-        "url": "https://api.hakush.in/gi/data/character.json",
-        "keys": ["CHS", "EN", "JP", "KR"],
-        "clean": False
-    },
-    {
-        "game": "GI",
-        "name": "原神武器",
-        "url": "https://api.hakush.in/gi/data/weapon.json",
-        "keys": ["CHS", "EN", "JP", "KR"],
-        "clean": False
-    },
-    {
-        "game": "HSR",
-        "name": "铁道角色",
-        "url": "https://api.hakush.in/hsr/data/character.json",
-        "keys": ["cn", "en", "jp", "kr"],
-        "clean": True  # HSR 需要清洗 Ruby 标签
-    },
-    {
-        "game": "ZZZ",
-        "name": "绝区零角色",
-        "url": "https://api.hakush.in/zzz/data/character.json",
-        "keys": ["CHS", "EN", "JA", "KO"],
-        "clean": False
-    },
-    {
-        "game": "ZZZ",
-        "name": "绝区零音擎",
-        "url": "https://api.hakush.in/zzz/data/weapon.json",
-        "keys": ["CHS", "EN", "JA", "KO"],
-        "clean": False
-    }
-]
+# 使用 UIGF 字典接口，按游戏与语言分别下载
+DICT_LANGS = ["chs", "en", "jp"]
+DICT_GAMES = {
+    "genshin": "原神",
+    "starrail": "星穹铁道"
+}
+DICT_URL_TEMPLATE = "https://api.uigf.org/dict/{game}/{lang}.json"
 
 TEXT_UPDATE_WORDS = """
 更新多游戏翻译表
 
-同步获取原神、星铁、绝区零的最新数据
-支持角色名、武器、音擎自动匹配识别
-针对不同游戏 API 结构进行精准适配
+同步获取原神、星铁的中/英/日词典数据
+支持名称自动匹配识别
+按游戏与语言分别下载，避免 all 聚合接口
 """
 
 # 全局存储翻译表数据 (标准化格式: [{"chs": "...", "alts": ["...", "..."]}, ...])
 WORD_TABLE = []
-
-def clean_hsr_text(text):
-    """剔除星铁数据中的 Ruby 标签，例如 {RUBY_B#...}内容{RUBY_E#}"""
-    if not text or not isinstance(text, str): return text
-    return re.sub(r'\{RUBY_[BE]#.*?\}', '', text)
 
 def load_word_table():
     global WORD_TABLE
@@ -86,46 +49,51 @@ def load_word_table():
         core.log.warn("(auto_fill_object) words.json 不存在，请执行更新操作")
 
 def update_words_json():
-    """从 5 个特定 API 获取并标准化数据"""
+    """从 UIGF 字典 API 获取 GI/HSR 的中英日词典并标准化"""
     core.window.status.set_status("(auto_fill_object) 正在同步多游戏数据...", 2)
-    new_standard_table = []
-    seen_chs = set()
+    table_by_chs = {}
 
     try:
-        for src in DATA_SOURCES:
-            core.log.info(f"(auto_fill_object) 正在获取 {src['name']}...")
-            response = requests.get(src['url'], timeout=15)
-            if response.status_code == 200:
+        for game_code, game_name in DICT_GAMES.items():
+            core.log.info(f"(auto_fill_object) 正在获取 {game_name} 词典...")
+            reverse_by_lang = {}
+
+            for lang in DICT_LANGS:
+                url = DICT_URL_TEMPLATE.format(game=game_code, lang=lang)
+                response = requests.get(url, timeout=15)
+                if response.status_code != 200:
+                    core.log.error(f"(auto_fill_object) 获取 {game_name} {lang} 词典失败: HTTP {response.status_code}")
+                    continue
+
                 raw_data = response.json()
-                # 遍历 API 返回的字典 (Key 通常是 ID)
-                for entry_id in raw_data:
-                    item = raw_data[entry_id]
-                    
-                    # 确定简中名称 (不同 API 的简中 Key 不同)
-                    chs_key = "CHS" if "CHS" in item else ("cn" if "cn" in item else None)
-                    if not chs_key: continue
-                    
-                    chs_name = item[chs_key]
-                    if src['clean']: chs_name = clean_hsr_text(chs_name)
-                    
-                    if not chs_name or chs_name in seen_chs: continue
-                    
-                    # 提取并清洗所有备选名称
-                    alts = []
-                    for k in src['keys']:
-                        val = item.get(k)
-                        if val:
-                            if src['clean']: val = clean_hsr_text(val)
-                            alts.append(val)
-                    
-                    if alts:
-                        new_standard_table.append({
-                            "chs": chs_name,
-                            "alts": list(set(alts)) # 去重
-                        })
-                        seen_chs.add(chs_name)
-            else:
-                core.log.error(f"(auto_fill_object) 获取 {src['name']} 失败: HTTP {response.status_code}")
+                # 接口格式：名称 -> ID，需反转为 ID -> 名称
+                reverse_by_lang[lang] = {str(value): key for key, value in raw_data.items()}
+
+            chs_dict = reverse_by_lang.get("chs", {})
+            for item_id, chs_name in chs_dict.items():
+                if not chs_name:
+                    continue
+
+                alts = []
+                for lang in DICT_LANGS:
+                    name = reverse_by_lang.get(lang, {}).get(item_id)
+                    if name and name not in alts:
+                        alts.append(name)
+
+                if not alts:
+                    continue
+
+                if chs_name not in table_by_chs:
+                    table_by_chs[chs_name] = {
+                        "chs": chs_name,
+                        "alts": alts
+                    }
+                else:
+                    for name in alts:
+                        if name not in table_by_chs[chs_name]["alts"]:
+                            table_by_chs[chs_name]["alts"].append(name)
+
+        new_standard_table = list(table_by_chs.values())
 
         if new_standard_table:
             # 保存标准化后的数据
@@ -137,7 +105,7 @@ def update_words_json():
             global WORD_TABLE
             WORD_TABLE = new_standard_table
             core.window.status.set_status("(auto_fill_object) 词库同步成功", 0)
-            core.window.messagebox.showinfo("更新成功", f"已成功从 5 个数据源同步 {len(new_standard_table)} 条数据。\n支持 GI/HSR/ZZZ 角色与装备识别。")
+            core.window.messagebox.showinfo("更新成功", f"已成功同步 {len(new_standard_table)} 条数据。\n仅包含 GI/HSR 的中英日词典。")
         else:
             raise Exception("未获取到任何有效数据")
 

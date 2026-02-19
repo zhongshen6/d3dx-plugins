@@ -1,14 +1,20 @@
-# Licensed under the GNU General Public License v3.0
-# d3dxSkinManage Plugin: gb_warehouse (API)
-
 import core
-
 import constants as const
-
 LOG_TAG = "(gb_warehouse/api)"
 
-
 class ApiMixin:
+    def _after(self, fn, *args):
+        self.master.after(0, lambda: fn(*args))
+
+    def _after_optional(self, name, *args):
+        fn = getattr(self, name, None)
+        if callable(fn):
+            self._after(fn, *args)
+
+    def _on_list_failed(self, page, message, notice):
+        self._after(self._set_status, message, 1)
+        self._after_optional("show_retry_notice", notice, page)
+
     def async_fetch_json(self, page, prefetch=False, game_id=None, mode="list", query=None, category_id=None):
         try:
             if game_id is None:
@@ -27,8 +33,8 @@ class ApiMixin:
                 records = payload.get("_aRecords", [])
                 meta = payload.get("_aMetadata", {})
                 page_count = meta.get("_nPageCount") or meta.get("_nPages")
-                self.master.after(0, lambda: self.on_page_loaded(page, records, page_count, prefetch, game_id, mode, query, category_id))
-                self.master.after(0, lambda: self.hide_retry_notice() if hasattr(self, "hide_retry_notice") else None)
+                self._after(self.on_page_loaded, page, records, page_count, prefetch, game_id, mode, query, category_id)
+                self._after_optional("hide_retry_notice")
                 if not prefetch:
                     self.master.after(0, lambda: self._set_status(f"列表已更新，第 {page} 页", 0))
             else:
@@ -77,7 +83,7 @@ class ApiMixin:
                     self.master.after(0, lambda: self.show_detail_error("详情解析失败"))
                     return
                 core.log.debug(f"{LOG_TAG} detail.ok mod_id={mod_id}")
-                self.master.after(0, lambda: self.on_detail_loaded(token, data))
+                self._after(self.on_detail_loaded, token, data)
             else:
                 core.log.warn(f"{LOG_TAG} detail.http_error mod_id={mod_id} status={res.status_code}")
                 self.master.after(0, lambda: self.show_detail_error(f"详情加载失败: {res.status_code}"))
