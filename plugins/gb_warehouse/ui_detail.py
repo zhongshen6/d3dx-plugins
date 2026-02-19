@@ -277,6 +277,7 @@ class DetailMixin:
         return text.strip()
 
     def render_downloads(self, files):
+        parent = getattr(self, "download_content", None) or self.download_inner
         for item in self.download_buttons:
             try:
                 item["item_frame"].destroy()
@@ -306,7 +307,7 @@ class DetailMixin:
             state = NORMAL if url else DISABLED
             meta_text = f"🕒 {date_text}\n💾 {size_text}\n📥 {count}"
 
-            item_frame = ttkbootstrap.Frame(self.download_inner)
+            item_frame = ttkbootstrap.Frame(parent)
             item_frame.pack(fill=X, pady=(0, 8))
 
             meta_row = ttkbootstrap.Frame(item_frame)
@@ -371,6 +372,13 @@ class DetailMixin:
                 "url": url
             })
 
+        if getattr(self, "download_content", None):
+            try:
+                self.download_content.bin_update()
+                self.download_content.bin_child_widgets_bind()
+                self.download_content.w_canvas.yview_moveto(0)
+            except Exception:
+                pass
         self.master.after(0, self.update_download_wraplength)
 
     def set_download_empty(self, message):
@@ -398,11 +406,23 @@ class DetailMixin:
         return f"{text}MB"
 
     def get_download_wrap_width(self, width=None):
-        try:
-            self.download_inner.update_idletasks()
-        except Exception:
-            pass
-        inner_w = self.download_inner.winfo_width()
+        scroll = getattr(self, "download_content", None)
+        inner_w = 0
+        if scroll:
+            try:
+                scroll.w_canvas.update_idletasks()
+            except Exception:
+                pass
+            try:
+                inner_w = scroll.w_canvas.winfo_width()
+            except Exception:
+                inner_w = 0
+        if inner_w <= 20:
+            try:
+                self.download_inner.update_idletasks()
+                inner_w = self.download_inner.winfo_width()
+            except Exception:
+                inner_w = 0
         if inner_w <= 20:
             if width is None or width <= 20:
                 return None

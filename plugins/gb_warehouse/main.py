@@ -62,6 +62,8 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self._pending_download_w = None
         self.download_buttons = []
         self.download_empty = None
+        self.download_content = None
+        self.download_canvas_window_id = None
         self.download_tasks = set()
         self._last_failed_page = None
         self.current_game_id = None
@@ -293,8 +295,21 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         )
         self.download_title.pack(fill=X, pady=(0, 8))
 
-        self.download_empty = ttkbootstrap.Label(
+        self.download_content = widgets.ScrollFrame(
             self.download_inner,
+            scb_pad=0,
+            horizontal_scroller=False,
+            vertical_scroller=False,
+        )
+        self.download_content.pack(fill=BOTH, expand=True)
+        try:
+            self.download_canvas_window_id = self.download_content.w_canvas.find_all()[0]
+            self.download_content.w_canvas.bind("<Configure>", self.on_download_canvas_resize, add="+")
+        except Exception:
+            self.download_canvas_window_id = None
+
+        self.download_empty = ttkbootstrap.Label(
+            self.download_content,
             text="点击左侧图片加载详情",
             justify=LEFT,
             anchor=NW
@@ -341,6 +356,11 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self._queue_resize(_pending_detail_w=event.width, _pending_detail_h=event.height)
 
     def on_download_resize(self, event):
+        self._queue_resize(_pending_download_w=event.width)
+
+    def on_download_canvas_resize(self, event):
+        if self.download_canvas_window_id is not None and self.download_content:
+            safe_call(self.download_content.w_canvas.itemconfig, self.download_canvas_window_id, width=event.width)
         self._queue_resize(_pending_download_w=event.width)
 
     def on_detail_text_resize(self, event):
