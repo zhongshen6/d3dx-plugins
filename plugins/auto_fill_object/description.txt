@@ -31,3 +31,6 @@
 [v1.0.0]
 新增：
 · 实现基础的文件名分析匹配功能，支持多语言识别。
+
+反馈地址
+https://github.com/zhongshen6/d3dx-plugins

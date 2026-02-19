@@ -1,5 +1,7 @@
-import os
+﻿import os
 import sys
+import tkinter as tk
+import tkinter.font as tkfont
 
 import requests
 import urllib3
@@ -56,6 +58,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.detail_image_cache = {}
         self.detail_image_fetching = set()
         self.detail_image_index = 0
+        self._detail_text_mask = None
         self._pending_detail_w = None
         self._pending_detail_h = None
         self._pending_detail_text_w = None
@@ -110,6 +113,19 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         if ivalue > 100:
             ivalue = 100
         safe_call(status.set_progress, ivalue)
+
+    def _apply_scroll_policy(self):
+        if hasattr(self, "scroll_frame") and getattr(self, "scroll_frame", None):
+            safe_call(self.scroll_frame.w_canvas.configure, yscrollincrement=const.LIST_SCROLL_STEP)
+
+        if hasattr(self, "detail_text_frame") and getattr(self, "detail_text_frame", None):
+            line_h = const.DETAIL_TEXT_SCROLL_MIN
+            try:
+                font = tkfont.Font(font=self.detail_text_label.cget("font"))
+                line_h = max(const.DETAIL_TEXT_SCROLL_MIN, int(font.metrics("linespace")))
+            except Exception:
+                pass
+            safe_call(self.detail_text_frame.w_canvas.configure, yscrollincrement=line_h * 4)
 
     def setup_ui(self):
         destroy_many(self.master.winfo_children())
@@ -272,6 +288,7 @@ class GBListUI(ListMixin, DetailMixin, ApiMixin, DownloadMixin, UpdateMixin, Set
         self.detail_text_label.pack(fill=X, expand=True, padx=2, pady=2)
         self.detail_text_frame.bin_child_widgets_bind()
         self.detail_text_frame.w_canvas.bind("<Configure>", self.on_detail_text_resize, add="+")
+        self._apply_scroll_policy()
 
         self.detail_action_bar = ttkbootstrap.Frame(self.detail_inner)
         self.detail_action_bar.pack(side=BOTTOM, fill=X, pady=(8, 0))

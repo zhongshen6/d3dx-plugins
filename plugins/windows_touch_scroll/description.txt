@@ -23,3 +23,6 @@ Windows 触控滚动插件 (windows_touch_scroll)
 - 重构为稳定的 Tk 输入通道方案。
 - 新增 `onlytouch` 单开关模式控制。
 - 优化日志输出与文案说明。
+
+反馈地址
+https://github.com/zhongshen6/d3dx-plugins
