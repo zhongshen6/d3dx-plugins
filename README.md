@@ -6,11 +6,11 @@
 
 ## 当前插件清单
 
-| 插件 | 版本 | 目录 | 主要用途 | 关键文件 |
-| --- | --- | --- | --- | --- |
-| `auto_fill_object` | `v1.4.0` | `plugins/auto_fill_object` | 导入 Mod 时按文件名智能匹配角色名，一键填充对象名 | `main.py` `description.txt` `words.json` |
-| `gb_warehouse` | `v1.4.1` | `plugins/gb_warehouse` | 在管理器内浏览和下载 GameBanana 模组（列表/详情/下载三栏） | `main.py` `description.txt` `word.json` |
-| `windows_touch_scroll` | `v1.1.0` | `plugins/windows_touch_scroll` | 让管理器正确响应触控操作 | `main.py` `description.txt` `config.json` |
+| 插件 | 版本 | 目录 | 主要用途 |
+| --- | --- | --- | --- |
+| `auto_fill_object` | `v1.4.0` | `plugins/auto_fill_object` | 导入 Mod 时按文件名智能匹配角色名，一键填充对象名 |
+| `gb_warehouse` | `v1.4.1` | `plugins/gb_warehouse` | 在管理器内浏览和下载 GameBanana 模组（列表/详情/下载三栏） |
+| `windows_touch_scroll` | `v1.1.0` | `plugins/windows_touch_scroll` | 让管理器正确响应触控操作 |
 
 ## 插件说明
 
