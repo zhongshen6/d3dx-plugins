@@ -1,8 +1,9 @@
 # d3dx-plugins
 
-本仓库为 [d3dxSkinManage](https://github.com/numlinka/d3dxSkinManage)  提供插件代码与插件文档，
+本仓库为 [d3dxSkinManage](https://github.com/numlinka/d3dxSkinManage) 提供插件代码与插件文档。
 
 - 协议：`GNU GPL v3.0`（见 `LICENSE`）
+- 主程序源码快照：`src/d3dxSkinManage/`（当前同步至上游 `v1.6.4`）
 
 ## 当前插件清单
 
@@ -65,7 +66,8 @@
 │  ├─auto_fill_object/
 │  ├─gb_warehouse/
 │  └─windows_touch_scroll/
-├─docs/                     # 插件文档站点源码（VitePress）
+├─src/d3dxSkinManage/       # 上游主程序源码快照
+├─docs/                     # 文档站点源码（VitePress）
 ├─.github/workflows/        # 文档部署工作流
 ├─requirements.txt          # Python 开发依赖
 └─package.json              # 文档脚本
